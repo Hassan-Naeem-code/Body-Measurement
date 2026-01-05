@@ -282,14 +282,14 @@ class FullBodyValidator:
 
     def is_human(self, pose_landmarks: PoseLandmarks) -> bool:
         """
-        Quick check to verify this is likely a human (not animal/object)
+        Strict check to verify this is a REAL HUMAN (not mask/mannequin/drawing/animal)
 
-        Humans have:
-        - Nose above shoulders
-        - Shoulders above hips
-        - Hips above knees
-        - Knees above ankles
-        - Bilateral symmetry
+        Real humans have:
+        1. Proper vertical body structure (nose > shoulders > hips > knees > ankles)
+        2. High visibility scores for key landmarks (real humans have clear body parts)
+        3. Bilateral symmetry (left/right sides at similar heights)
+        4. Realistic proportions (height > width, proper segment ratios)
+        5. Natural pose (not statue-like, not cartoon-like)
         """
         try:
             # Get landmark coordinates
@@ -303,22 +303,101 @@ class FullBodyValidator:
             left_ankle = pose_landmarks.landmarks[27]
             right_ankle = pose_landmarks.landmarks[28]
 
-            # Check vertical ordering (Y increases downward in images)
+            # === CHECK 1: Vertical ordering (basic anatomy) ===
             vertical_order_correct = (
                 nose["y"] < left_shoulder["y"] < left_hip["y"] < left_knee["y"] < left_ankle["y"] and
                 nose["y"] < right_shoulder["y"] < right_hip["y"] < right_knee["y"] < right_ankle["y"]
             )
+            if not vertical_order_correct:
+                return False
 
-            # Check reasonable bilateral symmetry (shoulders and hips roughly same Y level)
-            shoulder_symmetry = abs(left_shoulder["y"] - right_shoulder["y"]) < 50  # pixels
+            # === CHECK 2: High visibility scores (real humans have clear landmarks) ===
+            # Masks/drawings have face but NO BODY - this is the key difference!
+
+            # Check BODY landmarks separately (not face)
+            body_landmarks = [
+                "LEFT_SHOULDER", "RIGHT_SHOULDER",
+                "LEFT_HIP", "RIGHT_HIP",
+                "LEFT_KNEE", "RIGHT_KNEE",
+                "LEFT_ANKLE", "RIGHT_ANKLE"
+            ]
+
+            body_visibility_scores = [
+                pose_landmarks.visibility_scores.get(landmark, 0.0)
+                for landmark in body_landmarks
+            ]
+
+            # CRITICAL: Real humans must have visible BODY (not just face)
+            # Masks/drawings have face but no clear body landmarks
+            high_body_visibility_count = sum(1 for score in body_visibility_scores if score > 0.5)
+            if high_body_visibility_count < 6:  # At least 6/8 BODY landmarks must be visible
+                return False
+
+            # Average BODY visibility must be high
+            avg_body_visibility = sum(body_visibility_scores) / len(body_visibility_scores)
+            if avg_body_visibility < 0.5:  # Real humans have clearly visible bodies
+                return False
+
+            # Additionally check all critical landmarks (including face)
+            all_critical_landmarks = [
+                "NOSE", "LEFT_SHOULDER", "RIGHT_SHOULDER",
+                "LEFT_HIP", "RIGHT_HIP", "LEFT_KNEE", "RIGHT_KNEE"
+            ]
+            all_visibility_scores = [
+                pose_landmarks.visibility_scores.get(landmark, 0.0)
+                for landmark in all_critical_landmarks
+            ]
+
+            avg_overall_visibility = sum(all_visibility_scores) / len(all_visibility_scores)
+            if avg_overall_visibility < 0.45:
+                return False
+
+            # === CHECK 3: Bilateral symmetry ===
+            shoulder_symmetry = abs(left_shoulder["y"] - right_shoulder["y"]) < 50
             hip_symmetry = abs(left_hip["y"] - right_hip["y"]) < 50
+            if not (shoulder_symmetry and hip_symmetry):
+                return False
 
-            # Check aspect ratio (humans are taller than wide)
+            # === CHECK 4: Realistic aspect ratio ===
             body_height = max(left_ankle["y"], right_ankle["y"]) - nose["y"]
             body_width = abs(left_shoulder["x"] - right_shoulder["x"])
-            aspect_ratio_valid = body_height > body_width  # Height > width
+            if body_height <= body_width:  # Height must be > width
+                return False
 
-            return vertical_order_correct and shoulder_symmetry and hip_symmetry and aspect_ratio_valid
+            # Aspect ratio should be reasonable (humans are 1.5-3x taller than wide)
+            aspect_ratio = body_height / max(body_width, 1)
+            if aspect_ratio < 1.3 or aspect_ratio > 4.0:  # Too extreme = not human
+                return False
 
-        except (KeyError, IndexError):
+            # === CHECK 5: Realistic body segment proportions ===
+            # Check torso length vs leg length (should be somewhat balanced)
+            torso_length = abs(left_hip["y"] - left_shoulder["y"])
+            leg_length = abs(left_ankle["y"] - left_hip["y"])
+
+            if torso_length < 10 or leg_length < 10:  # Too small = suspicious
+                return False
+
+            # Torso/leg ratio should be reasonable (0.8-1.3 for humans)
+            torso_leg_ratio = torso_length / max(leg_length, 1)
+            if torso_leg_ratio < 0.6 or torso_leg_ratio > 1.5:  # Too extreme = not human
+                return False
+
+            # === CHECK 6: Arms should exist and be reasonable ===
+            left_wrist = pose_landmarks.landmarks[15]
+            right_wrist = pose_landmarks.landmarks[16]
+
+            # Arms should be detected with some visibility
+            arm_visibility = (
+                pose_landmarks.visibility_scores.get("LEFT_WRIST", 0.0) +
+                pose_landmarks.visibility_scores.get("RIGHT_WRIST", 0.0)
+            ) / 2
+
+            # At least one arm should be somewhat visible (humans have arms!)
+            if arm_visibility < 0.2:  # Very low = might not be human
+                return False
+
+            # All checks passed - likely a real human
+            return True
+
+        except (KeyError, IndexError, ZeroDivisionError):
             return False

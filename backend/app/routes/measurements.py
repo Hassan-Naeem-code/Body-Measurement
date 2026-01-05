@@ -232,18 +232,59 @@ async def process_multi_person_measurement(
 
         # Handle case: people detected but none valid
         if result.valid_people_count == 0:
-            # Provide helpful error message
+            # Check if the issue is "not a human" vs "missing body parts"
             all_missing_parts = set()
-            for pm in result.measurements:
-                all_missing_parts.update(pm.validation_result.missing_parts)
+            not_human_count = 0
 
-            missing_parts_list = list(all_missing_parts)[:3]  # Top 3 issues
+            for pm in result.measurements:
+                missing_parts = pm.validation_result.missing_parts
+                all_missing_parts.update(missing_parts)
+
+                # Check if marked as "not human"
+                if "not_human_detected" in missing_parts:
+                    not_human_count += 1
+
+            # Case 1: Not a real human (mask, drawing, animal, mannequin)
+            if not_human_count > 0:
+                if not_human_count == result.total_people_detected:
+                    # All detected objects are not humans
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=(
+                            "❌ NOT A REAL HUMAN DETECTED\n\n"
+                            "The image does not contain a real human being. "
+                            "Please upload a photo of a REAL PERSON (not a mask, mannequin, drawing, cartoon, or animal).\n\n"
+                            "Requirements:\n"
+                            "✓ Real human being (not an object or costume)\n"
+                            "✓ Full body visible (head to feet)\n"
+                            "✓ Clear photo (not blurry or obscured)"
+                        ),
+                    )
+                else:
+                    # Some are not human, some have other issues
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=(
+                            f"Detected {result.total_people_detected} people, but validation failed:\n"
+                            f"• {not_human_count} NOT REAL HUMANS (masks, drawings, objects)\n"
+                            f"• {result.total_people_detected - not_human_count} missing body parts\n\n"
+                            "Please upload a photo with REAL PEOPLE showing FULL BODY (head to feet)."
+                        ),
+                    )
+
+            # Case 2: Real humans but missing body parts (headshots, cropped images)
+            missing_parts_list = [p for p in all_missing_parts if p != "not_human_detected"][:5]
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=(
-                    f"Detected {result.total_people_detected} people, but none passed full-body validation. "
-                    f"Common issues: {', '.join(missing_parts_list)}. "
-                    f"Please ensure all people show WHOLE body: head, shoulders, elbows, hands, torso, legs, and feet."
+                    f"❌ FULL BODY NOT VISIBLE\n\n"
+                    f"Detected {result.total_people_detected} people, but they are not showing their WHOLE BODY.\n\n"
+                    f"Missing parts: {', '.join(missing_parts_list)}\n\n"
+                    "Requirements:\n"
+                    "✓ Full body visible from HEAD to FEET\n"
+                    "✓ All parts visible: head, shoulders, elbows, hands, torso, legs, feet\n"
+                    "✓ Not a headshot or cropped photo\n"
+                    "✓ Person standing upright (not sitting or lying down)"
                 ),
             )
 
