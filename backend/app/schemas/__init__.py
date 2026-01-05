@@ -5,7 +5,12 @@ from app.schemas.brand import (
     BrandWithToken,
     UsageStats,
 )
-from app.schemas.measurement import MeasurementResponse, MeasurementRecord
+from app.schemas.measurement import (
+    MeasurementResponse,
+    MeasurementRecord,
+    PersonMeasurementResponse,
+    MultiPersonMeasurementResponse,
+)
 from app.schemas.product import ProductCreate, ProductResponse
 from app.schemas.analytics import Analytics, PopularProduct, RevenueImpact
 
@@ -17,6 +22,8 @@ __all__ = [
     "UsageStats",
     "MeasurementResponse",
     "MeasurementRecord",
+    "PersonMeasurementResponse",
+    "MultiPersonMeasurementResponse",
     "ProductCreate",
     "ProductResponse",
     "Analytics",

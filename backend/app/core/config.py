@@ -32,6 +32,20 @@ class Settings(BaseSettings):
     CONFIDENCE_THRESHOLD: float = 0.6
     DEFAULT_HEIGHT_CM: float = 170.0
 
+    # YOLO Settings
+    YOLO_MODEL_SIZE: str = "yolov8m.pt"
+    YOLO_CONFIDENCE_THRESHOLD: float = 0.5
+
+    # Body Validation Settings
+    BODY_VALIDATION_HEAD_THRESHOLD: float = 0.6
+    BODY_VALIDATION_SHOULDERS_THRESHOLD: float = 0.7
+    BODY_VALIDATION_ELBOWS_THRESHOLD: float = 0.5
+    BODY_VALIDATION_HANDS_THRESHOLD: float = 0.5
+    BODY_VALIDATION_TORSO_THRESHOLD: float = 0.6
+    BODY_VALIDATION_LEGS_THRESHOLD: float = 0.6
+    BODY_VALIDATION_FEET_THRESHOLD: float = 0.6
+    BODY_VALIDATION_OVERALL_MIN: float = 0.65
+
     @field_validator('CORS_ORIGINS', mode='before')
     @classmethod
     def parse_cors_origins(cls, v):

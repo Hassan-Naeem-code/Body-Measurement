@@ -26,6 +26,14 @@ opencv-python==4.9.0.80
 numpy==1.26.3
 pillow==10.2.0
 scikit-learn==1.4.0
+ultralytics==8.1.0
+
+# 3D Body Reconstruction (Option 2)
+torch==2.1.2
+torchvision==0.16.2
+timm==0.9.12
+scipy==1.11.4
+open3d==0.18.0
 
 # Utilities
 python-dotenv==1.0.0
