@@ -33,6 +33,9 @@ class Measurement(Base):
     processing_time_ms = Column(Float, nullable=False)
     image_hash = Column(String, nullable=True)
 
+    # ML enhancement tracking (NEW)
+    used_ml_ratios = Column(JSON, nullable=True)  # Stores: {used: bool, method: str, confidence: float, body_shape: str, bmi: float}
+
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships

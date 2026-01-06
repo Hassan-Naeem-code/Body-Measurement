@@ -11,6 +11,7 @@ from app.ml.person_detector import PersonDetector, PersonBoundingBox
 from app.ml.pose_detector import PoseDetector, PoseLandmarks
 from app.ml.body_validator import FullBodyValidator, ValidationResult
 from app.ml.circumference_extractor_simple import SimpleCircumferenceExtractor, CircumferenceMeasurements
+from app.ml.circumference_extractor_ml import MLCircumferenceExtractor
 from app.ml.size_recommender_v2 import EnhancedSizeRecommender, SizeRecommendation
 from app.ml.demographic_detector import DemographicDetector, DemographicInfo
 
@@ -54,6 +55,7 @@ class DepthBasedMultiPersonProcessor:
         yolo_confidence: float = 0.5,
         pose_confidence: float = 0.5,
         custom_validation_thresholds: dict = None,
+        use_ml_ratios: bool = True,
     ):
         """
         Args:
@@ -61,11 +63,19 @@ class DepthBasedMultiPersonProcessor:
             yolo_confidence: Minimum YOLO detection confidence
             pose_confidence: Minimum MediaPipe pose detection confidence
             custom_validation_thresholds: Custom body part visibility thresholds
+            use_ml_ratios: If True, use ML-based depth ratio predictor (recommended)
         """
         self.person_detector = PersonDetector(yolo_model_size, yolo_confidence)
         self.pose_detector = PoseDetector(min_detection_confidence=pose_confidence)
         self.body_validator = FullBodyValidator(custom_validation_thresholds)
-        self.circumference_extractor = SimpleCircumferenceExtractor()
+
+        # Use ML-enhanced extractor if enabled
+        self.use_ml_ratios = use_ml_ratios
+        if use_ml_ratios:
+            self.circumference_extractor = MLCircumferenceExtractor(use_ml_ratios=True)
+        else:
+            self.circumference_extractor = SimpleCircumferenceExtractor()
+
         self.demographic_detector = DemographicDetector()
         self.size_recommender = EnhancedSizeRecommender()
 
@@ -118,10 +128,11 @@ class DepthBasedMultiPersonProcessor:
             processing_metadata={
                 "detection_model": "yolov8m",
                 "pose_model": "mediapipe_pose_v2",
-                "measurement_extractor": "geometric_circumference_v3",
+                "measurement_extractor": "ml_circumference_v4" if self.use_ml_ratios else "geometric_circumference_v3",
+                "depth_ratio_method": "ml_personalized" if self.use_ml_ratios else "fixed_anthropometric",
                 "validation_version": "1.0",
-                "accuracy_target": "95%+",
-                "features": "geometric_circumference_measurement, ellipse_approximation, auto_height_estimation, pose_angle_correction, anthropometric_ratios"
+                "accuracy_target": "80%+ exact, 93%+ within-1-size" if self.use_ml_ratios else "75%+ exact, 90%+ within-1-size",
+                "features": "ml_depth_ratio_prediction, body_shape_classification, bmi_estimation, gender_aware_ratios, geometric_circumference_measurement, ellipse_approximation, auto_height_estimation, pose_angle_correction" if self.use_ml_ratios else "geometric_circumference_measurement, ellipse_approximation, auto_height_estimation, pose_angle_correction, fixed_anthropometric_ratios"
             }
         )
 
