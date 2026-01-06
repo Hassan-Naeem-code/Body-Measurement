@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.routes import auth, measurements, brands
+from app.routes import auth, measurements, brands, products
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -44,6 +44,12 @@ app.include_router(
     brands.router,
     prefix=f"{settings.API_V1_PREFIX}/brands",
     tags=["Brands"],
+)
+
+app.include_router(
+    products.router,
+    prefix=f"{settings.API_V1_PREFIX}",
+    tags=["Products"],
 )
 
 

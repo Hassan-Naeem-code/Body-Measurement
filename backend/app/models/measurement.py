@@ -12,6 +12,7 @@ class Measurement(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     brand_id = Column(UUID(as_uuid=True), ForeignKey("brands.id"), nullable=False)
+    product_id = Column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="SET NULL"), nullable=True)
 
     # Body measurements in cm
     shoulder_width = Column(Float, nullable=False)
@@ -36,3 +37,4 @@ class Measurement(Base):
 
     # Relationships
     brand = relationship("Brand", back_populates="measurements")
+    product = relationship("Product", back_populates="measurements")

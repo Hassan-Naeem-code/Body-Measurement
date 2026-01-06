@@ -12,6 +12,10 @@ from app.models import Brand, Measurement
 from app.schemas import MeasurementResponse, MultiPersonMeasurementResponse, PersonMeasurementResponse
 from app.ml import PoseDetector, MeasurementExtractor, SizeRecommender, MultiPersonProcessor, EnhancedMultiPersonProcessor
 from app.ml.multi_person_processor_v3 import DepthBasedMultiPersonProcessor
+from app.ml.measurement_extractor_v2 import EnhancedMeasurementExtractor
+from app.ml.size_recommender_v2 import EnhancedSizeRecommender
+from app.ml.size_recommender_v3 import ProductAwareSizeRecommender
+from app.models.product import Product
 
 router = APIRouter()
 
@@ -36,6 +40,8 @@ def get_brand_by_api_key(api_key: str, db: Session) -> Brand:
 async def process_measurement(
     file: UploadFile = File(...),
     api_key: str = Query(..., description="API key for authentication"),
+    product_id: str = Query(None, description="Optional product ID for product-specific sizing"),
+    fit_preference: str = Query("regular", description="Fit preference: tight, regular, or loose"),
     db: Session = Depends(get_db),
 ):
     """
@@ -43,13 +49,25 @@ async def process_measurement(
 
     - **file**: Full-body image (JPG, PNG, WEBP)
     - **api_key**: Your API key for authentication
+    - **product_id**: (Optional) Product UUID for product-specific size recommendation
+    - **fit_preference**: (Optional) Fit preference - tight, regular, or loose (default: regular)
 
     Returns body measurements and size recommendation
+
+    **NEW**: Now supports product-specific sizing! Pass a product_id to get size recommendations
+    based on that product's specific size chart instead of generic demographic charts.
     """
     start_time = time.time()
 
     # Validate brand
     brand = get_brand_by_api_key(api_key, db)
+
+    # Validate fit preference
+    if fit_preference not in ["tight", "regular", "loose"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid fit_preference '{fit_preference}'. Must be 'tight', 'regular', or 'loose'",
+        )
 
     # Validate file type
     if file.content_type not in ["image/jpeg", "image/png", "image/webp"]:
@@ -90,13 +108,20 @@ async def process_measurement(
                 detail="Could not detect body pose in image. Please ensure the image shows a full body in clear view.",
             )
 
-        # Step 2: Extract measurements
-        extractor = MeasurementExtractor(reference_height_cm=settings.DEFAULT_HEIGHT_CM)
+        # Step 2: Extract measurements (with circumferences)
+        extractor = EnhancedMeasurementExtractor(reference_height_cm=settings.DEFAULT_HEIGHT_CM)
         body_measurements = extractor.extract_measurements(pose_landmarks)
 
-        # Step 3: Recommend size
-        recommender = SizeRecommender()
-        size_recommendation = recommender.recommend_size(body_measurements)
+        # Step 3: Recommend size (product-aware with v3)
+        recommender = ProductAwareSizeRecommender(db_session=db)
+        size_recommendation = recommender.recommend_size(
+            measurements=body_measurements,
+            gender=body_measurements.gender,
+            age_group=body_measurements.age_group,
+            demographic_label=body_measurements.demographic_label,
+            product_id=product_id,
+            fit_preference=fit_preference,
+        )
 
         # Calculate processing time
         processing_time_ms = (time.time() - start_time) * 1000
@@ -104,6 +129,7 @@ async def process_measurement(
         # Save measurement to database
         measurement_record = Measurement(
             brand_id=brand.id,
+            product_id=product_id if product_id else None,  # NEW: Save product association
             shoulder_width=body_measurements.shoulder_width,
             chest_width=body_measurements.chest_width,
             waist_width=body_measurements.waist_width,
