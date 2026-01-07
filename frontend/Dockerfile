@@ -1,19 +1,9 @@
+# Single-stage image running Next dev on 8080
 FROM node:20-alpine
-
-# Set working directory
 WORKDIR /app
-
-# Copy package files
 COPY package*.json ./
-
-# Install dependencies
-RUN npm install
-
-# Copy application code
+RUN npm ci
 COPY . .
-
-# Expose port
-EXPOSE 3000
-
-# Run development server
-CMD ["npm", "run", "dev"]
+ENV PORT=8080
+EXPOSE 8080
+CMD ["npm", "run", "dev", "--", "-p", "8080", "-H", "0.0.0.0"]

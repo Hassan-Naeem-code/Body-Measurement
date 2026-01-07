@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { authHelpers } from '@/lib/auth';
 import type { Brand } from '@/lib/types';
+import { ChartBar, ImagePlus, Shirt, LineChart, KeySquare, Menu, X } from 'lucide-react';
 
 export default function DashboardLayout({
   children,
@@ -35,11 +36,11 @@ export default function DashboardLayout({
   };
 
   const navItems = [
-    { name: 'Dashboard', href: '/dashboard', icon: '📊' },
-    { name: 'Upload Image', href: '/dashboard/upload', icon: '📸' },
-    { name: 'Products', href: '/dashboard/products', icon: '👔' },
-    { name: 'Analytics', href: '/dashboard/analytics', icon: '📈' },
-    { name: 'API Keys', href: '/dashboard/api-keys', icon: '🔑' },
+    { name: 'Dashboard', href: '/dashboard', Icon: ChartBar },
+    { name: 'Upload Image', href: '/dashboard/upload', Icon: ImagePlus },
+    { name: 'Products', href: '/dashboard/products', Icon: Shirt },
+    { name: 'Analytics', href: '/dashboard/analytics', Icon: LineChart },
+    { name: 'API Keys', href: '/dashboard/api-keys', Icon: KeySquare },
   ];
 
   if (!brand) {
@@ -51,13 +52,13 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[hsl(var(--background))]">
       {/* Sidebar */}
       <aside className="fixed inset-y-0 left-0 w-64 bg-white border-r border-gray-200 hidden lg:block">
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="p-6 border-b border-gray-200">
-            <h1 className="text-xl font-bold text-indigo-600">Body Measure API</h1>
+            <h1 className="text-xl font-bold text-indigo-600">Body Measurement</h1>
             <p className="text-sm text-gray-500 mt-1">{brand.name}</p>
           </div>
 
@@ -73,7 +74,7 @@ export default function DashboardLayout({
                     : 'text-gray-700 hover:bg-gray-100'
                 }`}
               >
-                <span className="text-xl">{item.icon}</span>
+                <item.Icon className="w-5 h-5" />
                 <span>{item.name}</span>
               </Link>
             ))}
@@ -105,12 +106,12 @@ export default function DashboardLayout({
       {/* Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50">
         <div className="flex items-center justify-between p-4">
-          <h1 className="text-lg font-bold text-indigo-600">Body Measure API</h1>
+          <h1 className="text-lg font-bold text-indigo-600">Body Measurement</h1>
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
           >
-            {isMenuOpen ? '✕' : '☰'}
+            {isMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
 
@@ -129,7 +130,7 @@ export default function DashboardLayout({
                       : 'text-gray-700 hover:bg-gray-100'
                   }`}
                 >
-                  <span className="text-xl">{item.icon}</span>
+                  <item.Icon className="w-5 h-5" />
                   <span>{item.name}</span>
                 </Link>
               ))}

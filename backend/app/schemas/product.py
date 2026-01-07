@@ -100,8 +100,8 @@ class ProductBase(BaseModel):
 
 class ProductCreate(ProductBase):
     """Schema for creating a product"""
-    # Optional: include size charts in creation
-    size_charts: Optional[List[SizeChartCreate]] = Field(None, description="Size charts for this product")
+    # Support for simple size chart format (backward compatible)
+    size_chart: Optional[Dict] = Field(None, description="Legacy size chart format as JSON")
 
 
 class ProductUpdate(BaseModel):
@@ -121,8 +121,8 @@ class ProductResponse(ProductBase):
     """Schema for product response"""
     id: UUID
     brand_id: UUID
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

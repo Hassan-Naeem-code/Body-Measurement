@@ -45,15 +45,27 @@ class FullBodyValidator:
     }
 
     # Minimum overall confidence to pass validation
-    MIN_OVERALL_CONFIDENCE = 0.65
+    DEFAULT_OVERALL_MIN = 0.65
 
     def __init__(self, custom_thresholds: Dict[str, float] = None):
         """
         Args:
             custom_thresholds: Override default visibility thresholds
+                             Can include 'overall_min' to override MIN_OVERALL_CONFIDENCE
         """
         self.thresholds = {**self.VISIBILITY_THRESHOLDS}
+
+        # Set overall minimum - use custom if provided, otherwise use default
+        self.MIN_OVERALL_CONFIDENCE = self.DEFAULT_OVERALL_MIN
+
         if custom_thresholds:
+            # Extract overall_min if provided
+            if 'overall_min' in custom_thresholds:
+                self.MIN_OVERALL_CONFIDENCE = custom_thresholds['overall_min']
+                # Don't add it to thresholds dict (it's not a body part threshold)
+                custom_thresholds = {k: v for k, v in custom_thresholds.items() if k != 'overall_min'}
+
+            # Update body part thresholds
             self.thresholds.update(custom_thresholds)
 
     def validate_full_body(self, pose_landmarks: PoseLandmarks) -> ValidationResult:
@@ -330,12 +342,12 @@ class FullBodyValidator:
             # CRITICAL: Real humans must have visible BODY (not just face)
             # Masks/drawings have face but no clear body landmarks
             high_body_visibility_count = sum(1 for score in body_visibility_scores if score > 0.5)
-            if high_body_visibility_count < 6:  # At least 6/8 BODY landmarks must be visible
+            if high_body_visibility_count < 5:  # At least 5/8 BODY landmarks must be visible
                 return False
 
             # Average BODY visibility must be high
             avg_body_visibility = sum(body_visibility_scores) / len(body_visibility_scores)
-            if avg_body_visibility < 0.5:  # Real humans have clearly visible bodies
+            if avg_body_visibility < 0.4:  # Real humans have clearly visible bodies
                 return False
 
             # Additionally check all critical landmarks (including face)
@@ -349,7 +361,7 @@ class FullBodyValidator:
             ]
 
             avg_overall_visibility = sum(all_visibility_scores) / len(all_visibility_scores)
-            if avg_overall_visibility < 0.45:
+            if avg_overall_visibility < 0.40:
                 return False
 
             # === CHECK 3: Bilateral symmetry ===
@@ -366,7 +378,7 @@ class FullBodyValidator:
 
             # Aspect ratio should be reasonable (humans are 1.5-3x taller than wide)
             aspect_ratio = body_height / max(body_width, 1)
-            if aspect_ratio < 1.3 or aspect_ratio > 4.0:  # Too extreme = not human
+            if aspect_ratio < 1.2 or aspect_ratio > 5.0:  # Too extreme = not human
                 return False
 
             # === CHECK 5: Realistic body segment proportions ===
@@ -379,7 +391,7 @@ class FullBodyValidator:
 
             # Torso/leg ratio should be reasonable (0.8-1.3 for humans)
             torso_leg_ratio = torso_length / max(leg_length, 1)
-            if torso_leg_ratio < 0.6 or torso_leg_ratio > 1.5:  # Too extreme = not human
+            if torso_leg_ratio < 0.5 or torso_leg_ratio > 1.8:  # Too extreme = not human
                 return False
 
             # === CHECK 6: Arms should exist and be reasonable ===
@@ -393,7 +405,7 @@ class FullBodyValidator:
             ) / 2
 
             # At least one arm should be somewhat visible (humans have arms!)
-            if arm_visibility < 0.2:  # Very low = might not be human
+            if arm_visibility < 0.1:  # Very low = might not be human
                 return False
 
             # All checks passed - likely a real human

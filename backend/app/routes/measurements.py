@@ -249,11 +249,20 @@ async def process_multi_person_measurement(
                 "torso": settings.BODY_VALIDATION_TORSO_THRESHOLD,
                 "legs": settings.BODY_VALIDATION_LEGS_THRESHOLD,
                 "feet": settings.BODY_VALIDATION_FEET_THRESHOLD,
+                "overall_min": settings.BODY_VALIDATION_OVERALL_MIN,  # FIX: Add overall minimum
             },
             use_ml_ratios=use_ml_ratios,  # NEW: Pass ML flag
         )
 
         result = processor.process_image(image)
+
+        # DEBUG: Log detection results
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"🔍 DETECTION RESULTS:")
+        logger.error(f"  Total people detected: {result.total_people_detected}")
+        logger.error(f"  Valid people count: {result.valid_people_count}")
+        logger.error(f"  Number of measurements: {len(result.measurements)}")
 
         # Calculate processing time
         processing_time_ms = (time.time() - start_time) * 1000
@@ -274,6 +283,15 @@ async def process_multi_person_measurement(
             for pm in result.measurements:
                 missing_parts = pm.validation_result.missing_parts
                 all_missing_parts.update(missing_parts)
+
+                # DEBUG: Log validation details
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"🔍 DEBUG Validation:")
+                logger.error(f"  Missing parts: {missing_parts}")
+                logger.error(f"  Overall confidence: {pm.validation_result.overall_confidence:.2%}")
+                logger.error(f"  Confidence scores: {pm.validation_result.confidence_scores}")
+                logger.error(f"  Threshold: {settings.BODY_VALIDATION_OVERALL_MIN:.2%}")
 
                 # Check if marked as "not human"
                 if "not_human_detected" in missing_parts:

@@ -1,72 +1,88 @@
 import Link from 'next/link';
+import { Camera, Bot, Shirt, ArrowRight, BookOpen } from 'lucide-react';
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto px-4 py-16">
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-5xl font-bold text-gray-900 mb-6">
-            Body Measurement API
-          </h1>
-          <p className="text-xl text-gray-600 mb-8">
-            AI-Powered Body Measurements & Size Recommendations for E-commerce
-          </p>
-          <p className="text-lg text-gray-500 mb-12">
-            Reduce returns, increase conversions, and improve customer satisfaction with accurate size recommendations powered by computer vision.
-          </p>
-
-          <div className="flex gap-4 justify-center mb-16">
-            <Link
-              href="/auth/register"
-              className="bg-indigo-600 text-white px-8 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition"
-            >
-              Get Started
-            </Link>
-            <Link
-              href="/auth/login"
-              className="bg-white text-indigo-600 px-8 py-3 rounded-lg font-semibold border-2 border-indigo-600 hover:bg-indigo-50 transition"
-            >
-              Sign In
-            </Link>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8 mt-16">
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <div className="text-4xl mb-4">📸</div>
-              <h3 className="text-xl font-semibold mb-2">Upload Photo</h3>
-              <p className="text-gray-600">
-                Customers upload a single full-body photo
-              </p>
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <div className="text-4xl mb-4">🤖</div>
-              <h3 className="text-xl font-semibold mb-2">AI Processing</h3>
-              <p className="text-gray-600">
-                Our AI extracts precise body measurements
-              </p>
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow-md">
-              <div className="text-4xl mb-4">👔</div>
-              <h3 className="text-xl font-semibold mb-2">Perfect Fit</h3>
-              <p className="text-gray-600">
-                Get accurate size recommendations instantly
-              </p>
+    <div className="min-h-screen">
+      {/* Hero */}
+      <section className="px-6 py-24">
+        <div className="max-w-6xl mx-auto">
+          <div className="max-w-3xl">
+            <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-gray-900">
+              Precision Sizing. Fewer Returns.
+            </h1>
+            <p className="mt-6 text-lg text-gray-600">
+              AI-powered body measurements and size recommendations that boost conversions and
+              reduce returns — integrate in minutes with a clean, modern API.
+            </p>
+            <div className="mt-10 flex gap-4">
+              <Link
+                href="/auth/register"
+                className="inline-flex items-center gap-2 rounded-lg px-6 py-3 font-semibold shadow-sm transition
+                           bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:opacity-90"
+              >
+                Start Free
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+              <Link
+                href="/dashboard"
+                className="inline-flex items-center gap-2 rounded-lg px-6 py-3 font-semibold transition
+                           bg-white text-gray-900 border border-gray-200 hover:bg-gray-50"
+              >
+                See Dashboard
+              </Link>
+              <Link
+                href="/auth/login"
+                className="inline-flex items-center gap-2 rounded-lg px-6 py-3 font-semibold transition
+                           bg-white text-gray-900 border border-gray-200 hover:bg-gray-50"
+              >
+                Sign In
+              </Link>
             </div>
           </div>
 
-          <div className="mt-16 bg-white p-8 rounded-lg shadow-md">
-            <h2 className="text-2xl font-bold mb-4">Key Features</h2>
-            <ul className="text-left max-w-2xl mx-auto space-y-3 text-gray-700">
-              <li>✓ Real-time body measurement extraction</li>
-              <li>✓ Personalized size recommendations</li>
-              <li>✓ 95%+ accuracy with confidence scores</li>
-              <li>✓ RESTful API for easy integration</li>
-              <li>✓ Analytics & ROI tracking dashboard</li>
-              <li>✓ Custom size charts per product</li>
-            </ul>
+          {/* Feature highlights */}
+          <div className="mt-20 grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="bg-white border border-gray-200 rounded-lg p-6">
+              <div className="w-10 h-10 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center mb-4">
+                <Camera className="w-5 h-5" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Upload Photo</h3>
+              <p className="mt-2 text-gray-600">Customers upload a single full-body photo.</p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-lg p-6">
+              <div className="w-10 h-10 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center mb-4">
+                <Bot className="w-5 h-5" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">AI Processing</h3>
+              <p className="mt-2 text-gray-600">We extract precise measurements instantly.</p>
+            </div>
+            <div className="bg-white border border-gray-200 rounded-lg p-6">
+              <div className="w-10 h-10 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center mb-4">
+                <Shirt className="w-5 h-5" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900">Perfect Fit</h3>
+              <p className="mt-2 text-gray-600">Accurate, confidence-scored recommendations.</p>
+            </div>
+          </div>
+
+          {/* CTA strip */}
+          <div className="mt-24 rounded-lg border border-gray-200 p-6 bg-white flex items-center justify-between">
+            <div>
+              <h4 className="text-lg font-semibold text-gray-900">Integrate in minutes</h4>
+              <p className="text-gray-600 mt-1">Clean REST API with simple, well-documented endpoints.</p>
+            </div>
+            <Link
+              href="/dashboard/api-keys"
+              className="inline-flex items-center gap-2 rounded-lg px-5 py-2.5 font-semibold shadow-sm transition
+                         bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] hover:opacity-90"
+            >
+              View API Keys
+              <BookOpen className="w-4 h-4" />
+            </Link>
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

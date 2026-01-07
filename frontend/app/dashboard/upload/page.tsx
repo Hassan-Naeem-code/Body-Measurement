@@ -5,6 +5,9 @@ import Image from 'next/image';
 import { measurementsAPI } from '@/lib/api';
 import { authHelpers } from '@/lib/auth';
 import type { MultiPersonMeasurementResult } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -38,6 +41,7 @@ export default function UploadPage() {
 
       const measurementResult = await measurementsAPI.processMultiPerson(apiKey, selectedFile);
       setResult(measurementResult);
+      toast.success('Image processed successfully');
     } catch (err: unknown) {
       const error = err as { response?: { data?: { detail?: string } } };
       setError(error.response?.data?.detail || 'Failed to process image. Please try again.');
@@ -76,15 +80,7 @@ export default function UploadPage() {
               Select a full-body photo for measurement analysis
             </p>
             <label className="inline-block">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-              <span className="bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 cursor-pointer inline-block transition">
-                Choose File
-              </span>
+              <Input type="file" accept="image/*" onChange={handleFileSelect} />
             </label>
             <p className="text-sm text-gray-500 mt-4">
               Supported formats: JPG, PNG, WEBP (Max 10MB)
@@ -119,13 +115,9 @@ export default function UploadPage() {
                 <h4 className="font-semibold text-gray-900 mb-4">
                   Ready to process
                 </h4>
-                <button
-                  onClick={handleUpload}
-                  disabled={loading}
-                  className="bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition disabled:bg-indigo-400 disabled:cursor-not-allowed"
-                >
+                <Button onClick={handleUpload} disabled={loading}>
                   {loading ? 'Processing...' : 'Process Measurements'}
-                </button>
+                </Button>
                 {loading && (
                   <p className="text-sm text-gray-600 mt-4">
                     Analyzing image with AI... This may take a few seconds.
@@ -167,7 +159,7 @@ export default function UploadPage() {
           </div>
 
           {/* Display Each Person */}
-          {result.measurements.map((person, index) => (
+          {result.measurements.map((person) => (
             <div key={person.person_id} className="bg-white p-6 rounded-lg shadow-sm border-2 border-indigo-200">
               {/* Person Header */}
               <div className="flex items-center justify-between mb-6">
@@ -357,12 +349,7 @@ export default function UploadPage() {
 
           {/* Actions */}
           <div className="flex gap-4">
-            <button
-              onClick={handleReset}
-              className="bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition"
-            >
-              Upload Another Image
-            </button>
+            <Button onClick={handleReset}>Upload Another Image</Button>
           </div>
         </div>
       )}

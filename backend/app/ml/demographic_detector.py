@@ -94,72 +94,66 @@ class DemographicDetector:
         """
         Detect gender from body proportions
 
-        Primary indicators:
-        1. Shoulder-to-hip ratio
-        2. Waist-to-hip ratio
+        PRIMARY indicator (most reliable):
+        1. Waist-to-hip ratio (0.70-0.85 = female, 0.85-0.95+ = male)
+
+        Secondary indicators:
+        2. Shoulder-to-hip ratio
         3. Chest-to-waist difference
 
         Returns:
             Tuple of (gender, confidence)
         """
+        # PRIMARY: Waist-to-hip ratio (most reliable)
+        waist_hip_ratio = measurements.waist_circumference / max(measurements.hip_circumference, 1e-3)
+
+        # Clear thresholds from research:
+        # Females: 0.67-0.85 (typically around 0.77)
+        # Males: 0.85-0.95+ (typically around 0.90)
+        if waist_hip_ratio < 0.85:
+            # Clear female indicator
+            gender = "female"
+            confidence = 0.90 if waist_hip_ratio < 0.80 else 0.75
+            return gender, confidence
+        elif waist_hip_ratio >= 0.90:
+            # Clear male indicator
+            gender = "male"
+            confidence = 0.90 if waist_hip_ratio > 0.95 else 0.80
+            return gender, confidence
+        
+        # If waist/hip is ambiguous (0.85-0.90), use secondary indicators
         indicators = []
 
-        # Indicator 1: Shoulder-to-hip ratio
-        shoulder_hip_ratio = measurements.shoulder_width / measurements.hip_width
-
-        if shoulder_hip_ratio >= self.MALE_SHOULDER_HIP_RATIO_MIN:
-            # Strong male indicator
-            indicators.append(("male", 0.85))
-        elif shoulder_hip_ratio <= self.FEMALE_SHOULDER_HIP_RATIO_MAX:
-            # Strong female indicator
-            indicators.append(("female", 0.85))
+        # Indicator 2: Shoulder-to-hip ratio
+        shoulder_hip_ratio = measurements.shoulder_width / max(measurements.hip_width, 1e-3)
+        if shoulder_hip_ratio >= 1.15:
+            indicators.append(("male", 0.75))
+        elif shoulder_hip_ratio <= 1.00:
+            indicators.append(("female", 0.75))
         else:
-            # Ambiguous - use other indicators
-            if shoulder_hip_ratio > 1.075:
-                indicators.append(("male", 0.60))
-            else:
-                indicators.append(("female", 0.60))
-
-        # Indicator 2: Waist-to-hip ratio (using circumferences)
-        waist_hip_ratio = measurements.waist_circumference / measurements.hip_circumference
-
-        # Males typically have higher waist-to-hip ratio (0.85-0.95)
-        # Females typically have lower waist-to-hip ratio (0.70-0.85)
-        if waist_hip_ratio > 0.90:
-            indicators.append(("male", 0.70))
-        elif waist_hip_ratio < 0.80:
-            indicators.append(("female", 0.70))
-        else:
-            # Ambiguous
-            if waist_hip_ratio > 0.85:
-                indicators.append(("male", 0.50))
-            else:
-                indicators.append(("female", 0.50))
+            indicators.append(("female", 0.60))
 
         # Indicator 3: Chest-to-waist difference
-        chest_waist_diff_ratio = (measurements.chest_circumference - measurements.waist_circumference) / measurements.waist_circumference
+        chest_waist_diff_ratio = (measurements.chest_circumference - measurements.waist_circumference) / max(measurements.waist_circumference, 1e-3)
+        if chest_waist_diff_ratio > 0.30:
+            indicators.append(("male", 0.70))
+        elif chest_waist_diff_ratio < 0.10:
+            indicators.append(("female", 0.70))
+        else:
+            indicators.append(("female", 0.55))
 
-        # Males have larger chest-waist difference (more V-shaped)
-        if chest_waist_diff_ratio > 0.25:
-            indicators.append(("male", 0.65))
-        elif chest_waist_diff_ratio < 0.15:
-            indicators.append(("female", 0.65))
-
-        # Combine indicators
+        # Combine secondary indicators
         male_score = sum(conf for gender, conf in indicators if gender == "male")
         female_score = sum(conf for gender, conf in indicators if gender == "female")
 
         if male_score > female_score:
             gender = "male"
-            confidence = min(0.95, male_score / len(indicators))
+            confidence = min(0.80, male_score / max(len(indicators), 1))
         else:
             gender = "female"
-            confidence = min(0.95, female_score / len(indicators))
+            confidence = min(0.80, female_score / max(len(indicators), 1))
 
-        # Ensure minimum confidence
-        confidence = max(0.55, confidence)
-
-        return gender, confidence
+        return gender, max(0.60, confidence)
 
     def _detect_age_group(
         self,

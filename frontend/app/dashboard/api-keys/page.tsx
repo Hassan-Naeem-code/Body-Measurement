@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { authHelpers } from '@/lib/auth';
 import type { Brand } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 
 export default function ApiKeysPage() {
   const [brand, setBrand] = useState<Brand | null>(null);
@@ -38,7 +40,8 @@ export default function ApiKeysPage() {
       </div>
 
       {/* API Key Display */}
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+      <Card>
+        <CardContent>
         <h2 className="text-xl font-bold text-gray-900 mb-4">Your API Key</h2>
         <p className="text-gray-600 mb-4">
           Use this key to authenticate API requests from your application
@@ -49,12 +52,9 @@ export default function ApiKeysPage() {
             <code className="text-sm font-mono text-gray-900 break-all">
               {brand.api_key}
             </code>
-            <button
-              onClick={handleCopy}
-              className="ml-4 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition whitespace-nowrap"
-            >
+            <Button onClick={handleCopy} className="ml-4 whitespace-nowrap">
               {copied ? '✓ Copied!' : 'Copy'}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -64,10 +64,12 @@ export default function ApiKeysPage() {
             or commit it to version control.
           </p>
         </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* API Documentation */}
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+      <Card>
+        <CardContent>
         <h2 className="text-xl font-bold text-gray-900 mb-4">API Usage</h2>
         <p className="text-gray-600 mb-4">
           Here are some example API calls to get you started:
@@ -115,10 +117,12 @@ export default function ApiKeysPage() {
             </div>
           </div>
         </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Account Info */}
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+      <Card>
+        <CardContent>
         <h2 className="text-xl font-bold text-gray-900 mb-4">Account Information</h2>
         <div className="space-y-3">
           <div className="flex justify-between">
@@ -152,7 +156,8 @@ export default function ApiKeysPage() {
             </span>
           </div>
         </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* API Documentation Link */}
       <div className="bg-indigo-50 border border-indigo-200 p-6 rounded-lg text-center">
@@ -166,7 +171,7 @@ export default function ApiKeysPage() {
           href="http://localhost:8000/docs"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-block bg-indigo-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-indigo-700 transition"
+          className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-6 py-3 font-medium hover:bg-primary/90"
         >
           View API Docs
         </a>

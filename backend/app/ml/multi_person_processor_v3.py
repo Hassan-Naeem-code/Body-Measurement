@@ -120,11 +120,12 @@ class DepthBasedMultiPersonProcessor:
 
         invalid_count = len(all_person_measurements) - len(valid_measurements)
 
+        # DEBUG: Return ALL measurements (including invalid) to see validation details
         return MultiPersonResult(
             total_people_detected=len(people_bboxes),
             valid_people_count=len(valid_measurements),
             invalid_people_count=invalid_count,
-            measurements=valid_measurements,
+            measurements=all_person_measurements,  # TEMPORARY: Return ALL to see why failing
             processing_metadata={
                 "detection_model": "yolov8m",
                 "pose_model": "mediapipe_pose_v2",
@@ -151,11 +152,15 @@ class DepthBasedMultiPersonProcessor:
         Returns:
             PersonMeasurement (may be invalid)
         """
+        print(f"🔍 Processing person {bbox.person_id}")
+
         # Crop person region
         cropped_image, crop_metadata = self.person_detector.crop_person(image, bbox)
+        print(f"  Cropped image: {cropped_image.shape}")
 
         # Detect pose landmarks
         pose_landmarks = self.pose_detector.detect_from_array(cropped_image)
+        print(f"  Pose detected: {pose_landmarks is not None}")
 
         # If pose detection failed
         if pose_landmarks is None:
@@ -177,9 +182,17 @@ class DepthBasedMultiPersonProcessor:
 
         # Validate full body
         validation_result = self.body_validator.validate_full_body(pose_landmarks)
+        print(f"  Validation result:")
+        print(f"    Is valid: {validation_result.is_valid}")
+        print(f"    Missing parts: {validation_result.missing_parts}")
+        print(f"    Overall confidence: {validation_result.overall_confidence:.2%}")
+        print(f"    Confidence scores: {validation_result.confidence_scores}")
 
         # Check if human (not animal/object)
-        if not self.body_validator.is_human(pose_landmarks):
+        # If validation already passed, treat as human; otherwise fall back to heuristic check.
+        is_human = validation_result.is_valid or self.body_validator.is_human(pose_landmarks)
+        print(f"    Is human: {is_human}")
+        if not is_human:
             validation_result.is_valid = False
             validation_result.missing_parts.append("not_human_detected")
 

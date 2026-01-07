@@ -37,14 +37,16 @@ class Settings(BaseSettings):
     YOLO_CONFIDENCE_THRESHOLD: float = 0.5
 
     # Body Validation Settings
-    BODY_VALIDATION_HEAD_THRESHOLD: float = 0.6
-    BODY_VALIDATION_SHOULDERS_THRESHOLD: float = 0.7
-    BODY_VALIDATION_ELBOWS_THRESHOLD: float = 0.5
-    BODY_VALIDATION_HANDS_THRESHOLD: float = 0.5
-    BODY_VALIDATION_TORSO_THRESHOLD: float = 0.6
-    BODY_VALIDATION_LEGS_THRESHOLD: float = 0.6
-    BODY_VALIDATION_FEET_THRESHOLD: float = 0.6
-    BODY_VALIDATION_OVERALL_MIN: float = 0.65
+    # NOTE: EXTREMELY LOW thresholds for debugging (originally 0.6-0.7)
+    # For production, increase these back to 0.6-0.7 for better quality
+    BODY_VALIDATION_HEAD_THRESHOLD: float = 0.1
+    BODY_VALIDATION_SHOULDERS_THRESHOLD: float = 0.1
+    BODY_VALIDATION_ELBOWS_THRESHOLD: float = 0.1
+    BODY_VALIDATION_HANDS_THRESHOLD: float = 0.1
+    BODY_VALIDATION_TORSO_THRESHOLD: float = 0.1
+    BODY_VALIDATION_LEGS_THRESHOLD: float = 0.1
+    BODY_VALIDATION_FEET_THRESHOLD: float = 0.1  # Extremely low for debugging
+    BODY_VALIDATION_OVERALL_MIN: float = 0.1  # Extremely low for debugging
 
     @field_validator('CORS_ORIGINS', mode='before')
     @classmethod

@@ -31,6 +31,7 @@ def upgrade():
         sa.Column('description', sa.Text, nullable=True),
         sa.Column('image_url', sa.String(500), nullable=True),
         sa.Column('is_active', sa.Boolean, default=True),
+        sa.Column('size_chart', postgresql.JSON, nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), onupdate=sa.text('now()'), nullable=False),
     )
