@@ -1,14 +1,19 @@
 """
 Demographic Detection - Gender and Age Group Classification
 Uses body measurements and proportions to detect gender and age group
+
+Now supports trained ML model for gender detection when available.
 """
 
 import numpy as np
 from typing import Tuple
 from dataclasses import dataclass
+import logging
 
 from app.ml.pose_detector import PoseLandmarks
 from app.ml.circumference_extractor_simple import CircumferenceMeasurements
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -38,8 +43,14 @@ class DemographicDetector:
     - Adult: > 170cm (F) or > 180cm (M), mature proportions
     """
 
-    def __init__(self):
-        # Gender detection thresholds
+    def __init__(self, use_ml_model: bool = True):
+        """
+        Initialize the demographic detector
+
+        Args:
+            use_ml_model: If True, try to use trained ML model for gender detection
+        """
+        # Gender detection thresholds (used as fallback)
         self.MALE_SHOULDER_HIP_RATIO_MIN = 1.10  # Males typically > 1.10
         self.FEMALE_SHOULDER_HIP_RATIO_MAX = 1.05  # Females typically < 1.05
 
@@ -53,6 +64,20 @@ class DemographicDetector:
         # Body proportion thresholds
         self.CHILD_HEAD_BODY_RATIO = 6.0  # Children have larger heads relative to body
         self.ADULT_HEAD_BODY_RATIO = 7.5  # Adults have smaller heads relative to body
+
+        # Try to load ML gender detector
+        self.ml_gender_detector = None
+        if use_ml_model:
+            try:
+                from app.ml.trained_gender_detector import get_gender_detector
+                self.ml_gender_detector = get_gender_detector()
+                if self.ml_gender_detector.is_model_loaded:
+                    logger.info("Using trained ML model for gender detection")
+                else:
+                    logger.info("ML model not loaded, using rule-based gender detection")
+                    self.ml_gender_detector = None
+            except Exception as e:
+                logger.warning(f"Could not load ML gender detector: {e}")
 
     def detect_demographics(
         self,
@@ -94,66 +119,113 @@ class DemographicDetector:
         """
         Detect gender from body proportions
 
-        PRIMARY indicator (most reliable):
-        1. Waist-to-hip ratio (0.70-0.85 = female, 0.85-0.95+ = male)
+        Uses trained ML model if available, otherwise falls back to rule-based.
+
+        PRIMARY indicator (most reliable for all body types including athletic):
+        1. Shoulder-to-hip WIDTH ratio - Males have broader shoulders relative to hips
 
         Secondary indicators:
-        2. Shoulder-to-hip ratio
-        3. Chest-to-waist difference
+        2. Shoulder width absolute (males typically wider)
+        3. Chest-to-waist taper (athletic males have high taper)
 
         Returns:
             Tuple of (gender, confidence)
         """
-        # PRIMARY: Waist-to-hip ratio (most reliable)
-        waist_hip_ratio = measurements.waist_circumference / max(measurements.hip_circumference, 1e-3)
+        # Use ML model if available
+        if self.ml_gender_detector is not None:
+            try:
+                gender, confidence = self.ml_gender_detector.predict(
+                    measurements=measurements
+                )
+                logger.debug(f"ML gender prediction: {gender} ({confidence:.2%})")
+                return gender, confidence
+            except Exception as e:
+                logger.warning(f"ML gender prediction failed: {e}, using rule-based")
 
-        # Clear thresholds from research:
-        # Females: 0.67-0.85 (typically around 0.77)
-        # Males: 0.85-0.95+ (typically around 0.90)
-        if waist_hip_ratio < 0.85:
-            # Clear female indicator
-            gender = "female"
-            confidence = 0.90 if waist_hip_ratio < 0.80 else 0.75
-            return gender, confidence
-        elif waist_hip_ratio >= 0.90:
-            # Clear male indicator
-            gender = "male"
-            confidence = 0.90 if waist_hip_ratio > 0.95 else 0.80
-            return gender, confidence
-        
-        # If waist/hip is ambiguous (0.85-0.90), use secondary indicators
-        indicators = []
+        # Fall back to rule-based detection
+        # Collect gender scores from multiple indicators
+        male_score = 0.0
+        female_score = 0.0
 
-        # Indicator 2: Shoulder-to-hip ratio
+        # PRIMARY INDICATOR: Shoulder-to-hip WIDTH ratio
+        # Males: typically 1.15-1.40 (broad shoulders, narrower hips)
+        # Females: typically 0.90-1.10 (shoulders similar or narrower than hips)
         shoulder_hip_ratio = measurements.shoulder_width / max(measurements.hip_width, 1e-3)
-        if shoulder_hip_ratio >= 1.15:
-            indicators.append(("male", 0.75))
+
+        if shoulder_hip_ratio >= 1.25:
+            # Very broad shoulders - strong male indicator
+            male_score += 3.0
+        elif shoulder_hip_ratio >= 1.15:
+            # Broad shoulders - male indicator
+            male_score += 2.0
+        elif shoulder_hip_ratio >= 1.05:
+            # Slightly broader shoulders - slight male indicator
+            male_score += 0.5
+        elif shoulder_hip_ratio <= 0.95:
+            # Hips wider than shoulders - strong female indicator
+            female_score += 2.5
         elif shoulder_hip_ratio <= 1.00:
-            indicators.append(("female", 0.75))
+            # Hips similar or wider - female indicator
+            female_score += 1.5
         else:
-            indicators.append(("female", 0.60))
+            # Ambiguous range (1.00-1.05)
+            female_score += 0.5
 
-        # Indicator 3: Chest-to-waist difference
-        chest_waist_diff_ratio = (measurements.chest_circumference - measurements.waist_circumference) / max(measurements.waist_circumference, 1e-3)
-        if chest_waist_diff_ratio > 0.30:
-            indicators.append(("male", 0.70))
-        elif chest_waist_diff_ratio < 0.10:
-            indicators.append(("female", 0.70))
-        else:
-            indicators.append(("female", 0.55))
+        # SECONDARY: Absolute shoulder width
+        # Males typically have wider shoulders (40-50cm)
+        # Females typically have narrower shoulders (35-42cm)
+        if measurements.shoulder_width >= 45:
+            male_score += 1.5
+        elif measurements.shoulder_width >= 42:
+            male_score += 0.5
+        elif measurements.shoulder_width <= 38:
+            female_score += 1.0
+        elif measurements.shoulder_width <= 40:
+            female_score += 0.5
 
-        # Combine secondary indicators
-        male_score = sum(conf for gender, conf in indicators if gender == "male")
-        female_score = sum(conf for gender, conf in indicators if gender == "female")
+        # SECONDARY: Chest-to-waist taper ratio
+        # Athletic males have pronounced taper (chest much larger than waist)
+        # This helps distinguish athletic males from females
+        chest_waist_ratio = measurements.chest_circumference / max(measurements.waist_circumference, 1e-3)
+
+        if chest_waist_ratio >= 1.35:
+            # Very high taper - athletic male
+            male_score += 1.5
+        elif chest_waist_ratio >= 1.20:
+            # High taper - likely male
+            male_score += 0.8
+        elif chest_waist_ratio <= 1.05:
+            # Low taper - rectangular build, could be either
+            pass  # No strong indicator
+
+        # SECONDARY: Hip circumference relative to chest
+        # Females typically have larger hips relative to chest
+        hip_chest_ratio = measurements.hip_circumference / max(measurements.chest_circumference, 1e-3)
+
+        if hip_chest_ratio >= 1.10:
+            # Hips larger than chest - female indicator
+            female_score += 1.5
+        elif hip_chest_ratio >= 1.02:
+            # Slightly larger hips - slight female indicator
+            female_score += 0.5
+        elif hip_chest_ratio <= 0.90:
+            # Chest much larger than hips - male indicator
+            male_score += 1.0
+
+        # Determine gender based on scores
+        total_score = male_score + female_score
+        if total_score < 1.0:
+            # Very low confidence - default to female with low confidence
+            return "female", 0.55
 
         if male_score > female_score:
             gender = "male"
-            confidence = min(0.80, male_score / max(len(indicators), 1))
+            confidence = min(0.95, 0.55 + (male_score / total_score) * 0.40)
         else:
             gender = "female"
-            confidence = min(0.80, female_score / max(len(indicators), 1))
+            confidence = min(0.95, 0.55 + (female_score / total_score) * 0.40)
 
-        return gender, max(0.60, confidence)
+        return gender, confidence
 
     def _detect_age_group(
         self,

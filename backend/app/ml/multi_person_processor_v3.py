@@ -192,11 +192,28 @@ class DepthBasedMultiPersonProcessor:
         # If validation already passed, treat as human; otherwise fall back to heuristic check.
         is_human = validation_result.is_valid or self.body_validator.is_human(pose_landmarks)
         print(f"    Is human: {is_human}")
-        if not is_human:
+
+        # Check if ESSENTIAL parts for measurements are visible
+        # Even if full validation fails, we can still measure if core parts exist
+        essential_parts_ok = self._has_essential_measurement_parts(pose_landmarks)
+        print(f"    Essential parts OK: {essential_parts_ok}")
+
+        if not is_human and not essential_parts_ok:
             validation_result.is_valid = False
             validation_result.missing_parts.append("not_human_detected")
 
-        # If validation failed
+        # If we have essential parts, mark as valid even if some parts missing
+        if essential_parts_ok and not validation_result.is_valid:
+            # Keep the missing_parts info but allow processing
+            # Filter out non-critical missing parts for the valid flag
+            non_critical = ["elbows", "hands/wrists"]
+            critical_missing = [p for p in validation_result.missing_parts
+                               if p not in non_critical and p != "not_human_detected"]
+            if not critical_missing and is_human:
+                validation_result.is_valid = True
+                print(f"    -> Validated via essential parts (non-critical missing: {validation_result.missing_parts})")
+
+        # If validation still failed after lenient checks
         if not validation_result.is_valid:
             return PersonMeasurement(
                 person_id=bbox.person_id,
@@ -265,3 +282,40 @@ class DepthBasedMultiPersonProcessor:
             demographic_info=demographic_info,
             bounding_box=bbox
         )
+
+    def _has_essential_measurement_parts(self, pose_landmarks: PoseLandmarks) -> bool:
+        """
+        Check if essential body parts for measurements are visible.
+
+        Essential parts are:
+        - Shoulders (for shoulder width, chest estimation)
+        - Hips (for hip/waist measurements)
+        - Ankles (for height estimation)
+
+        Non-essential parts (can be occluded by backpack, bag, etc.):
+        - Elbows
+        - Wrists/Hands
+
+        Returns:
+            True if essential parts are sufficiently visible for measurements
+        """
+        # Essential landmarks and minimum visibility threshold
+        essential_landmarks = {
+            "LEFT_SHOULDER": 0.3,
+            "RIGHT_SHOULDER": 0.3,
+            "LEFT_HIP": 0.25,
+            "RIGHT_HIP": 0.25,
+            "LEFT_ANKLE": 0.2,
+            "RIGHT_ANKLE": 0.2,
+        }
+
+        visible_count = 0
+
+        for landmark, threshold in essential_landmarks.items():
+            visibility = pose_landmarks.visibility_scores.get(landmark, 0.0)
+            if visibility >= threshold:
+                visible_count += 1
+
+        # Allow measurements if at least 5 of 6 essential landmarks are visible
+        # This handles cases where one side might be slightly occluded
+        return visible_count >= 5

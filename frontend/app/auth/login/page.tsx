@@ -7,6 +7,7 @@ import { authAPI } from '@/lib/api';
 import { authHelpers } from '@/lib/auth';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Eye, EyeOff, Sparkles, ArrowRight, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -50,80 +51,149 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h1>
-          <p className="text-gray-600">Sign in to your account</p>
+    <div className="min-h-screen bg-background flex">
+      {/* Left side - Branding */}
+      <div className="hidden lg:flex lg:w-1/2 gradient-primary relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute top-20 left-20 w-96 h-96 bg-white rounded-full blur-3xl" />
+          <div className="absolute bottom-20 right-20 w-64 h-64 bg-white rounded-full blur-3xl" />
         </div>
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
+        <div className="relative flex flex-col justify-center items-center p-12 text-white text-center">
+          <div className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center mb-8">
+            <Sparkles className="w-10 h-10" />
           </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              Email Address
-            </label>
-            <Input
-              type="email"
-              id="email"
-              name="email"
-              required
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="you@company.com"
-            />
+          <h1 className="text-4xl font-bold mb-4">Body Measurement API</h1>
+          <p className="text-xl text-white/80 max-w-md">
+            AI-powered body measurements for accurate size recommendations
+          </p>
+          <div className="mt-12 grid grid-cols-3 gap-6 text-center">
+            <div>
+              <p className="text-3xl font-bold">95%</p>
+              <p className="text-white/70 text-sm mt-1">Accuracy</p>
+            </div>
+            <div>
+              <p className="text-3xl font-bold">500ms</p>
+              <p className="text-white/70 text-sm mt-1">Avg Speed</p>
+            </div>
+            <div>
+              <p className="text-3xl font-bold">10K+</p>
+              <p className="text-white/70 text-sm mt-1">Users</p>
+            </div>
           </div>
+        </div>
+      </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              Password
-            </label>
-            <div className="relative">
-              <Input
-                type={showPassword ? 'text' : 'password'}
-                id="password"
-                name="password"
-                required
-                value={formData.password}
-                onChange={handleChange}
-                placeholder="Enter your password"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
-              >
-                {showPassword ? (
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                    <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-14-14zM10 3a7 7 0 016.642 10.618l-1.34-1.34A5 5 0 109.98 13.34l1.34 1.34A7 7 0 1110 3z" clipRule="evenodd" />
-                  </svg>
-                )}
-              </button>
+      {/* Right side - Form */}
+      <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
+        <div className="w-full max-w-md space-y-8 animate-fade-in">
+          {/* Mobile logo */}
+          <div className="lg:hidden flex justify-center mb-8">
+            <div className="w-14 h-14 rounded-xl gradient-primary flex items-center justify-center shadow-lg">
+              <Sparkles className="w-7 h-7 text-white" />
             </div>
           </div>
 
-          <Button type="submit" disabled={loading} className="w-full">
-            {loading ? 'Signing in...' : 'Sign In'}
-          </Button>
-        </form>
+          {/* Header */}
+          <div className="text-center lg:text-left">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">
+              Welcome back
+            </h1>
+            <p className="text-muted-foreground mt-2">
+              Sign in to your account to continue
+            </p>
+          </div>
 
-        <div className="mt-6 text-center">
-          <p className="text-gray-600">
-            Don&apos;t have an account?{' '}
-            <Link href="/auth/register" className="text-indigo-600 hover:text-indigo-700 font-semibold">
-              Create one
-            </Link>
-          </p>
+          {/* Error Message */}
+          {error && (
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-destructive-muted border border-destructive/20 animate-slide-up">
+              <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0" />
+              <p className="text-sm text-foreground">{error}</p>
+            </div>
+          )}
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="space-y-2">
+              <label
+                htmlFor="email"
+                className="block text-sm font-medium text-foreground"
+              >
+                Email Address
+              </label>
+              <Input
+                type="email"
+                id="email"
+                name="email"
+                required
+                value={formData.email}
+                onChange={handleChange}
+                placeholder="you@company.com"
+                autoComplete="email"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-foreground"
+              >
+                Password
+              </label>
+              <div className="relative">
+                <Input
+                  type={showPassword ? 'text' : 'password'}
+                  id="password"
+                  name="password"
+                  required
+                  value={formData.password}
+                  onChange={handleChange}
+                  placeholder="Enter your password"
+                  autoComplete="current-password"
+                  className="pr-12"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              disabled={loading}
+              loading={loading}
+              className="w-full h-12 text-base"
+            >
+              {!loading && (
+                <>
+                  Sign In
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                </>
+              )}
+              {loading && 'Signing in...'}
+            </Button>
+          </form>
+
+          {/* Footer */}
+          <div className="text-center">
+            <p className="text-muted-foreground">
+              Don&apos;t have an account?{' '}
+              <Link
+                href="/auth/register"
+                className="text-primary font-semibold hover:text-primary-hover transition-colors"
+              >
+                Create one
+              </Link>
+            </p>
+          </div>
         </div>
       </div>
     </div>

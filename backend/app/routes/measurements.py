@@ -1,10 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status, Request
 from sqlalchemy.orm import Session
 import cv2
 import numpy as np
 import time
 import tempfile
 import os
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import logging
 
 from app.core.database import get_db
 from app.core.config import settings
@@ -18,6 +21,48 @@ from app.ml.size_recommender_v3 import ProductAwareSizeRecommender
 from app.models.product import Product
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+# Thread pool for CPU-bound ML operations
+# This prevents blocking the async event loop
+_ml_thread_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="ml_worker")
+
+# Request timeout in seconds
+REQUEST_TIMEOUT_SECONDS = 120
+
+
+async def check_client_disconnected(request: Request) -> bool:
+    """Check if the client has disconnected"""
+    return await request.is_disconnected()
+
+
+async def run_ml_task_with_timeout(func, *args, timeout=REQUEST_TIMEOUT_SECONDS, request: Request = None):
+    """
+    Run CPU-bound ML task in thread pool with timeout and disconnection detection.
+
+    This allows:
+    1. Non-blocking execution (other requests can proceed)
+    2. Timeout handling (prevents hanging forever)
+    3. Client disconnection detection (cancels if client leaves)
+    """
+    loop = asyncio.get_event_loop()
+
+    # Create a task for the ML processing
+    ml_task = loop.run_in_executor(_ml_thread_pool, func, *args)
+
+    try:
+        # Wait for completion with timeout
+        result = await asyncio.wait_for(ml_task, timeout=timeout)
+        return result
+    except asyncio.TimeoutError:
+        logger.warning("ML processing timed out after %d seconds", timeout)
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=f"Processing timed out after {timeout} seconds. Please try with a smaller image."
+        )
+    except asyncio.CancelledError:
+        logger.info("ML task was cancelled (client disconnected)")
+        raise
 
 
 def get_brand_by_api_key(api_key: str, db: Session) -> Brand:
@@ -171,6 +216,7 @@ async def process_measurement(
 
 @router.post("/process-multi", response_model=MultiPersonMeasurementResponse)
 async def process_multi_person_measurement(
+    request: Request,
     file: UploadFile = File(...),
     api_key: str = Query(..., description="API key for authentication"),
     use_ml_ratios: bool = Query(True, description="Use ML-based depth ratio prediction (recommended for better accuracy)"),
@@ -235,26 +281,42 @@ async def process_multi_person_measurement(
         )
 
     try:
+        # Check if client disconnected before heavy processing
+        if await request.is_disconnected():
+            logger.info("Client disconnected before ML processing started")
+            raise HTTPException(
+                status_code=status.HTTP_499_CLIENT_CLOSED_REQUEST,
+                detail="Client disconnected"
+            )
+
         # Process all people in the image with DEPTH-BASED V3 processor
         # (ML-enhanced for better accuracy)
-        processor = DepthBasedMultiPersonProcessor(
-            yolo_model_size=settings.YOLO_MODEL_SIZE,
-            yolo_confidence=settings.YOLO_CONFIDENCE_THRESHOLD,
-            pose_confidence=settings.CONFIDENCE_THRESHOLD,
-            custom_validation_thresholds={
-                "head": settings.BODY_VALIDATION_HEAD_THRESHOLD,
-                "shoulders": settings.BODY_VALIDATION_SHOULDERS_THRESHOLD,
-                "elbows": settings.BODY_VALIDATION_ELBOWS_THRESHOLD,
-                "hands": settings.BODY_VALIDATION_HANDS_THRESHOLD,
-                "torso": settings.BODY_VALIDATION_TORSO_THRESHOLD,
-                "legs": settings.BODY_VALIDATION_LEGS_THRESHOLD,
-                "feet": settings.BODY_VALIDATION_FEET_THRESHOLD,
-                "overall_min": settings.BODY_VALIDATION_OVERALL_MIN,  # FIX: Add overall minimum
-            },
-            use_ml_ratios=use_ml_ratios,  # NEW: Pass ML flag
-        )
+        def run_ml_processing():
+            """CPU-bound ML processing function to run in thread pool"""
+            processor = DepthBasedMultiPersonProcessor(
+                yolo_model_size=settings.YOLO_MODEL_SIZE,
+                yolo_confidence=settings.YOLO_CONFIDENCE_THRESHOLD,
+                pose_confidence=settings.CONFIDENCE_THRESHOLD,
+                custom_validation_thresholds={
+                    "head": settings.BODY_VALIDATION_HEAD_THRESHOLD,
+                    "shoulders": settings.BODY_VALIDATION_SHOULDERS_THRESHOLD,
+                    "elbows": settings.BODY_VALIDATION_ELBOWS_THRESHOLD,
+                    "hands": settings.BODY_VALIDATION_HANDS_THRESHOLD,
+                    "torso": settings.BODY_VALIDATION_TORSO_THRESHOLD,
+                    "legs": settings.BODY_VALIDATION_LEGS_THRESHOLD,
+                    "feet": settings.BODY_VALIDATION_FEET_THRESHOLD,
+                    "overall_min": settings.BODY_VALIDATION_OVERALL_MIN,
+                },
+                use_ml_ratios=use_ml_ratios,
+            )
+            return processor.process_image(image)
 
-        result = processor.process_image(image)
+        # Run ML processing in thread pool with timeout
+        result = await run_ml_task_with_timeout(
+            run_ml_processing,
+            timeout=REQUEST_TIMEOUT_SECONDS,
+            request=request
+        )
 
         # DEBUG: Log detection results
         import logging

@@ -1,0 +1,53 @@
+{
+  "total_samples": 10000,
+  "gender_distribution": {
+    "female": 5000,
+    "male": 5000
+  },
+  "body_type_distribution": {
+    "slim": 1951,
+    "average": 4036,
+    "athletic": 2544,
+    "heavy": 1469
+  },
+  "size_distribution": {
+    "M": 1796,
+    "S": 1179,
+    "L": 2383,
+    "XS": 1519,
+    "XXL": 1362,
+    "XL": 1761
+  },
+  "measurement_stats": {
+    "height": {
+      "mean": 168.43,
+      "std": 9.49,
+      "min": 140.0,
+      "max": 200.9
+    },
+    "shoulder_width": {
+      "mean": 42.89,
+      "std": 5.05,
+      "min": 31.2,
+      "max": 57.9
+    },
+    "chest_circumference": {
+      "mean": 99.33,
+      "std": 13.99,
+      "min": 58.9,
+      "max": 148.8
+    },
+    "waist_circumference": {
+      "mean": 78.84,
+      "std": 16.3,
+      "min": 29.6,
+      "max": 137.6
+    },
+    "hip_circumference": {
+      "mean": 102.31,
+      "std": 9.69,
+      "min": 76.2,
+      "max": 133.6
+    }
+  }
+}

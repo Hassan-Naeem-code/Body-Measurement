@@ -294,14 +294,17 @@ class FullBodyValidator:
 
     def is_human(self, pose_landmarks: PoseLandmarks) -> bool:
         """
-        Strict check to verify this is a REAL HUMAN (not mask/mannequin/drawing/animal)
+        Check to verify this is a REAL HUMAN (not mask/mannequin/drawing/animal)
 
-        Real humans have:
-        1. Proper vertical body structure (nose > shoulders > hips > knees > ankles)
-        2. High visibility scores for key landmarks (real humans have clear body parts)
-        3. Bilateral symmetry (left/right sides at similar heights)
-        4. Realistic proportions (height > width, proper segment ratios)
-        5. Natural pose (not statue-like, not cartoon-like)
+        This check is VERY LENIENT - we want to accept real humans even if some parts
+        are occluded (e.g., backpack covering arms, hands behind back, bag in front).
+
+        Only reject if CLEARLY NOT human (completely wrong anatomy).
+
+        Requirements (intentionally minimal):
+        1. Basic vertical structure (head somewhere above hips)
+        2. At least some core body landmarks detected
+        3. Not impossibly proportioned
         """
         try:
             # Get landmark coordinates
@@ -310,106 +313,77 @@ class FullBodyValidator:
             right_shoulder = pose_landmarks.landmarks[12]
             left_hip = pose_landmarks.landmarks[23]
             right_hip = pose_landmarks.landmarks[24]
-            left_knee = pose_landmarks.landmarks[25]
-            right_knee = pose_landmarks.landmarks[26]
             left_ankle = pose_landmarks.landmarks[27]
             right_ankle = pose_landmarks.landmarks[28]
 
-            # === CHECK 1: Vertical ordering (basic anatomy) ===
-            vertical_order_correct = (
-                nose["y"] < left_shoulder["y"] < left_hip["y"] < left_knee["y"] < left_ankle["y"] and
-                nose["y"] < right_shoulder["y"] < right_hip["y"] < right_knee["y"] < right_ankle["y"]
-            )
-            if not vertical_order_correct:
+            # === CHECK 1: Basic vertical ordering (very lenient) ===
+            # Only check that head is above hips (allows for many poses)
+            avg_shoulder_y = (left_shoulder["y"] + right_shoulder["y"]) / 2
+            avg_hip_y = (left_hip["y"] + right_hip["y"]) / 2
+            avg_ankle_y = (left_ankle["y"] + right_ankle["y"]) / 2
+
+            # Head should be above hips (very basic check)
+            if nose["y"] > avg_hip_y:
                 return False
 
-            # === CHECK 2: High visibility scores (real humans have clear landmarks) ===
-            # Masks/drawings have face but NO BODY - this is the key difference!
+            # Hips should be above ankles
+            if avg_hip_y > avg_ankle_y + 50:  # Allow some tolerance for poses
+                return False
 
-            # Check BODY landmarks separately (not face)
-            body_landmarks = [
+            # === CHECK 2: Core body landmarks must have SOME detection ===
+            # Very lenient - just need evidence that a body was detected
+            core_landmarks = [
                 "LEFT_SHOULDER", "RIGHT_SHOULDER",
-                "LEFT_HIP", "RIGHT_HIP",
-                "LEFT_KNEE", "RIGHT_KNEE",
-                "LEFT_ANKLE", "RIGHT_ANKLE"
+                "LEFT_HIP", "RIGHT_HIP"
             ]
 
-            body_visibility_scores = [
+            core_visibility_scores = [
                 pose_landmarks.visibility_scores.get(landmark, 0.0)
-                for landmark in body_landmarks
+                for landmark in core_landmarks
             ]
 
-            # CRITICAL: Real humans must have visible BODY (not just face)
-            # Masks/drawings have face but no clear body landmarks
-            high_body_visibility_count = sum(1 for score in body_visibility_scores if score > 0.5)
-            if high_body_visibility_count < 5:  # At least 5/8 BODY landmarks must be visible
+            # At least 2 of 4 core landmarks must be detected (>0.15)
+            # This is very lenient to handle occlusion
+            visible_core_count = sum(1 for score in core_visibility_scores if score > 0.15)
+            if visible_core_count < 2:
                 return False
 
-            # Average BODY visibility must be high
-            avg_body_visibility = sum(body_visibility_scores) / len(body_visibility_scores)
-            if avg_body_visibility < 0.4:  # Real humans have clearly visible bodies
-                return False
-
-            # Additionally check all critical landmarks (including face)
-            all_critical_landmarks = [
-                "NOSE", "LEFT_SHOULDER", "RIGHT_SHOULDER",
-                "LEFT_HIP", "RIGHT_HIP", "LEFT_KNEE", "RIGHT_KNEE"
-            ]
-            all_visibility_scores = [
-                pose_landmarks.visibility_scores.get(landmark, 0.0)
-                for landmark in all_critical_landmarks
-            ]
-
-            avg_overall_visibility = sum(all_visibility_scores) / len(all_visibility_scores)
-            if avg_overall_visibility < 0.40:
-                return False
-
-            # === CHECK 3: Bilateral symmetry ===
-            shoulder_symmetry = abs(left_shoulder["y"] - right_shoulder["y"]) < 50
-            hip_symmetry = abs(left_hip["y"] - right_hip["y"]) < 50
-            if not (shoulder_symmetry and hip_symmetry):
-                return False
-
-            # === CHECK 4: Realistic aspect ratio ===
-            body_height = max(left_ankle["y"], right_ankle["y"]) - nose["y"]
+            # === CHECK 3: Not impossibly proportioned ===
+            body_height = avg_ankle_y - nose["y"]
             body_width = abs(left_shoulder["x"] - right_shoulder["x"])
-            if body_height <= body_width:  # Height must be > width
+
+            # Only reject if clearly impossible
+            if body_height <= 0:
                 return False
 
-            # Aspect ratio should be reasonable (humans are 1.5-3x taller than wide)
-            aspect_ratio = body_height / max(body_width, 1)
-            if aspect_ratio < 1.2 or aspect_ratio > 5.0:  # Too extreme = not human
+            if body_width > 0:
+                # Aspect ratio check - very lenient range
+                aspect_ratio = body_height / max(body_width, 0.01)
+                if aspect_ratio < 0.5 or aspect_ratio > 10.0:
+                    return False
+
+            # === CHECK 4: Basic body structure exists ===
+            torso_length = abs(avg_hip_y - avg_shoulder_y)
+
+            # Torso must exist (even if small due to camera angle)
+            if torso_length < 2:
                 return False
 
-            # === CHECK 5: Realistic body segment proportions ===
-            # Check torso length vs leg length (should be somewhat balanced)
-            torso_length = abs(left_hip["y"] - left_shoulder["y"])
-            leg_length = abs(left_ankle["y"] - left_hip["y"])
+            # === SKIP strict symmetry check ===
+            # People with bags, backpacks, or standing at angles will have asymmetry
+            # Only check for extreme asymmetry that would indicate non-human
+            shoulder_diff = abs(left_shoulder["y"] - right_shoulder["y"])
+            hip_diff = abs(left_hip["y"] - right_hip["y"])
 
-            if torso_length < 10 or leg_length < 10:  # Too small = suspicious
+            # Very lenient - allow significant asymmetry (e.g., bag on one shoulder)
+            # Image coordinates typically 0-1 normalized, so 0.3 is very tolerant
+            max_asymmetry = max(body_height * 0.4, 150)  # 40% of body height or 150 pixels
+            if shoulder_diff > max_asymmetry or hip_diff > max_asymmetry:
                 return False
 
-            # Torso/leg ratio should be reasonable (0.8-1.3 for humans)
-            torso_leg_ratio = torso_length / max(leg_length, 1)
-            if torso_leg_ratio < 0.5 or torso_leg_ratio > 1.8:  # Too extreme = not human
-                return False
-
-            # === CHECK 6: Arms should exist and be reasonable ===
-            left_wrist = pose_landmarks.landmarks[15]
-            right_wrist = pose_landmarks.landmarks[16]
-
-            # Arms should be detected with some visibility
-            arm_visibility = (
-                pose_landmarks.visibility_scores.get("LEFT_WRIST", 0.0) +
-                pose_landmarks.visibility_scores.get("RIGHT_WRIST", 0.0)
-            ) / 2
-
-            # At least one arm should be somewhat visible (humans have arms!)
-            if arm_visibility < 0.1:  # Very low = might not be human
-                return False
-
-            # All checks passed - likely a real human
+            # All basic checks passed - likely a real human
             return True
 
         except (KeyError, IndexError, ZeroDivisionError):
-            return False
+            # If we can't check properly, give benefit of doubt
+            return True

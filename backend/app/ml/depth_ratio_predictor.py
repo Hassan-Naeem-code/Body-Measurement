@@ -146,11 +146,39 @@ class MLDepthRatioPredictor:
         body_height_px = abs(avg_ankle_y - nose['y'])
         torso_length_ratio = torso_length_px / max(body_height_px, 1.0)
 
-        # 7. BMI estimate (from shoulder width and height)
-        # Wider shoulders relative to height suggests higher BMI
-        # This is a rough proxy, not actual BMI
-        bmi_estimate = (shoulder_width_norm * img_width) / (body_height_px / img_height) * 25
-        bmi_estimate = max(15.0, min(40.0, bmi_estimate))  # Clamp to reasonable range
+        # 7. BMI estimate (from body proportions)
+        # Use waist-to-height ratio as BMI proxy (more accurate than shoulder width)
+        # WHtR (Waist-to-Height Ratio): <0.4 = underweight, 0.4-0.5 = healthy, 0.5-0.6 = overweight, >0.6 = obese
+        # We estimate waist width relative to body height
+        if body_height_px > 0:
+            # Waist-to-height ratio converted to BMI-like scale (18.5-30)
+            waist_to_height_ratio = waist_width_norm / (body_height_px / img_height)
+            # Also consider shoulder-to-hip ratio for body mass distribution
+            body_mass_indicator = (shoulder_width_norm + hip_width_norm) / 2
+
+            # Map ratios to BMI-like estimate
+            # Thin: waist_to_height < 0.25 → BMI ~18
+            # Normal: waist_to_height 0.25-0.35 → BMI ~22
+            # Overweight: waist_to_height 0.35-0.45 → BMI ~27
+            # Obese: waist_to_height > 0.45 → BMI ~32+
+            if waist_to_height_ratio < 0.20:
+                bmi_estimate = 17.5
+            elif waist_to_height_ratio < 0.28:
+                bmi_estimate = 18.5 + (waist_to_height_ratio - 0.20) * 50  # 18.5-22.5
+            elif waist_to_height_ratio < 0.38:
+                bmi_estimate = 22.5 + (waist_to_height_ratio - 0.28) * 50  # 22.5-27.5
+            else:
+                bmi_estimate = 27.5 + (waist_to_height_ratio - 0.38) * 40  # 27.5+
+
+            # Adjust based on overall body mass indicator (broader = higher BMI)
+            if body_mass_indicator > 0.30:
+                bmi_estimate += 2.0
+            elif body_mass_indicator < 0.18:
+                bmi_estimate -= 2.0
+        else:
+            bmi_estimate = 22.0  # Default healthy BMI
+
+        bmi_estimate = max(16.0, min(38.0, bmi_estimate))  # Clamp to reasonable range
 
         # 8. Chest-to-waist ratio (taper indicator)
         chest_width_norm = shoulder_width_norm * 0.88

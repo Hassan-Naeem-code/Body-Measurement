@@ -251,8 +251,13 @@ class SimpleCircumferenceExtractor:
         image_width: int,
         image_height: int
     ) -> float:
-        """Estimate height using multiple methods"""
-        # Get key landmarks
+        """
+        Estimate height using multiple anthropometric methods with proper pixel-to-cm conversion
+
+        Uses known body part sizes (head ~23cm, torso ~52cm, legs ~80cm) to derive
+        pixel-to-cm ratios, then estimates total height from multiple body measurements.
+        """
+        # Get key landmarks (coordinates are in pixels)
         nose = self._get_landmark(pose_landmarks, "NOSE")
         left_eye = self._get_landmark(pose_landmarks, "LEFT_EYE")
         left_ankle = self._get_landmark(pose_landmarks, "LEFT_ANKLE")
@@ -262,96 +267,59 @@ class SimpleCircumferenceExtractor:
         left_hip = self._get_landmark(pose_landmarks, "LEFT_HIP")
         right_hip = self._get_landmark(pose_landmarks, "RIGHT_HIP")
 
-        # Method 1: Head height ratio (head is ~13% of body height for adults)
-        head_height_pixels = abs(left_eye["y"] - nose["y"]) * 2
-        if head_height_pixels > 0:
-            estimated_height_1 = head_height_pixels * self.HEAD_TO_BODY_RATIO
-        else:
-            estimated_height_1 = 0
-
-        # Method 2: Full body height (nose to ankles)
-        avg_ankle_y = (left_ankle["y"] + right_ankle["y"]) / 2
-        body_height_pixels = abs(avg_ankle_y - nose["y"])
-
-        # Method 3: Torso-based estimation (torso is ~52% of height)
+        # Calculate key distances in pixels
+        head_height_pixels = abs(left_eye["y"] - nose["y"]) * 2.5  # Eye-to-nose * 2.5 ≈ full head
         avg_shoulder_y = (left_shoulder["y"] + right_shoulder["y"]) / 2
         avg_hip_y = (left_hip["y"] + right_hip["y"]) / 2
-        torso_height_pixels = abs(avg_hip_y - avg_shoulder_y)
-        if torso_height_pixels > 0:
-            estimated_height_3 = torso_height_pixels / self.TORSO_TO_HEIGHT_RATIO
-        else:
-            estimated_height_3 = 0
+        avg_ankle_y = (left_ankle["y"] + right_ankle["y"]) / 2
 
-        # Method 4: Leg length (legs are ~48% of height)
-        left_knee = self._get_landmark(pose_landmarks, "LEFT_KNEE")
-        avg_knee_y = (left_knee["y"] + self._get_landmark(pose_landmarks, "RIGHT_KNEE")["y"]) / 2
-        leg_length_pixels = abs(avg_ankle_y - avg_hip_y)
-        if leg_length_pixels > 0:
-            estimated_height_4 = leg_length_pixels / self.LEG_TO_HEIGHT_RATIO
-        else:
-            estimated_height_4 = 0
+        torso_pixels = abs(avg_hip_y - avg_shoulder_y)
+        leg_pixels = abs(avg_ankle_y - avg_hip_y)
+        full_body_pixels = abs(avg_ankle_y - nose["y"])
 
-        # Weighted average with validity checking
-        estimates = []
-        weights = []
-
-        if estimated_height_1 > 0:
-            estimates.append(estimated_height_1)
-            weights.append(0.20)  # Head ratio - less reliable
-
-        if body_height_pixels > 0:
-            # Use body height directly as most reliable
-            estimates.append(body_height_pixels)
-            weights.append(0.40)  # Highest weight
-
-        if estimated_height_3 > 0:
-            estimates.append(estimated_height_3)
-            weights.append(0.25)  # Torso-based
-
-        if estimated_height_4 > 0:
-            estimates.append(estimated_height_4)
-            weights.append(0.15)  # Leg-based
-
-        # Normalize weights
-        total_weight = sum(weights)
-        if total_weight > 0:
-            weights = [w / total_weight for w in weights]
-            estimated_height_pixels = sum(e * w for e, w in zip(estimates, weights))
-        else:
-            estimated_height_pixels = body_height_pixels
-
-        # Convert pixels to cm using multiple calibration methods
+        # Collect height estimates using different anthropometric references
         height_estimates = []
 
-        # Calibration Method 1: Using head height (22cm average for adults)
-        if head_height_pixels > 5:  # Valid head detection
-            pixels_per_cm_head = head_height_pixels / 22.0
-            height_from_head = estimated_height_pixels / pixels_per_cm_head
-            if 140 < height_from_head < 210:  # Sanity check
-                height_estimates.append(height_from_head)
+        # Method 1: Head reference (adult head height ≈ 22-24cm)
+        if head_height_pixels > 10:
+            HEAD_CM = 23.0
+            pixels_per_cm_head = head_height_pixels / HEAD_CM
+            # Full body from nose to ankle ≈ 90% of total height
+            height_from_head = (full_body_pixels / pixels_per_cm_head) / 0.90
+            if 145 < height_from_head < 205:
+                height_estimates.append((height_from_head, 0.25))
 
-        # Calibration Method 2: Using torso (typical torso is ~75cm for adults)
-        if torso_height_pixels > 10:  # Valid torso detection
-            pixels_per_cm_torso = torso_height_pixels / 75.0
-            height_from_torso = estimated_height_pixels / pixels_per_cm_torso
-            if 140 < height_from_torso < 210:  # Sanity check
-                height_estimates.append(height_from_torso)
+        # Method 2: Torso reference (shoulder-to-hip ≈ 45-55cm for most adults)
+        if torso_pixels > 20:
+            AVG_TORSO_CM = 52.0
+            pixels_per_cm_torso = torso_pixels / AVG_TORSO_CM
+            height_from_torso = (full_body_pixels / pixels_per_cm_torso) / 0.90
+            if 145 < height_from_torso < 205:
+                height_estimates.append((height_from_torso, 0.30))
 
-        # Calibration Method 3: Using body height directly
-        # Assume nose-to-ankle distance represents ~95% of actual height
-        if body_height_pixels > 20:  # Valid body height
-            # Adult average: nose to ankle ~162cm (95% of 170cm height)
-            pixels_per_cm_body = body_height_pixels / 162.0
-            height_from_body = body_height_pixels / pixels_per_cm_body * 1.05
-            if 140 < height_from_body < 210:  # Sanity check
-                height_estimates.append(height_from_body)
+        # Method 3: Leg reference (hip-to-ankle ≈ 78-88cm for most adults)
+        if leg_pixels > 30:
+            AVG_LEG_CM = 80.0
+            pixels_per_cm_leg = leg_pixels / AVG_LEG_CM
+            height_from_leg = (full_body_pixels / pixels_per_cm_leg) / 0.90
+            if 145 < height_from_leg < 205:
+                height_estimates.append((height_from_leg, 0.30))
 
-        # Use average of valid estimates, or fallback
+        # Method 4: Combined body proportions (torso + legs validation)
+        if torso_pixels > 20 and leg_pixels > 30:
+            torso_to_leg_ratio = torso_pixels / leg_pixels
+            if 0.50 < torso_to_leg_ratio < 0.85:
+                combined_body_cm = (torso_pixels / 0.30 + leg_pixels / 0.46) / 2
+                if 145 < combined_body_cm < 205:
+                    height_estimates.append((combined_body_cm, 0.15))
+
+        # Calculate weighted average
         if height_estimates:
-            estimated_height_cm = sum(height_estimates) / len(height_estimates)
+            total_weight = sum(w for _, w in height_estimates)
+            estimated_height_cm = sum(h * w for h, w in height_estimates) / total_weight
         else:
-            # Last resort fallback
-            estimated_height_cm = 170.0  # Default to average height
+            # Fallback to default height
+            estimated_height_cm = 170.0
 
         # Clamp to reasonable range
         estimated_height_cm = max(152.0, min(200.0, estimated_height_cm))
