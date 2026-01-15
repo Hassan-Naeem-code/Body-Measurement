@@ -12,7 +12,7 @@ import logging
 from app.core.database import get_db
 from app.core.config import settings
 from app.models import Brand, Measurement
-from app.schemas import MeasurementResponse, MultiPersonMeasurementResponse, PersonMeasurementResponse
+from app.schemas import MeasurementResponse, MultiPersonMeasurementResponse, PersonMeasurementResponse, PoseLandmarks as PoseLandmarksSchema, PoseLandmark as PoseLandmarkSchema, BoundingBox as BoundingBoxSchema
 from app.ml import PoseDetector, MeasurementExtractor, SizeRecommender, MultiPersonProcessor, EnhancedMultiPersonProcessor
 from app.ml.multi_person_processor_v3 import DepthBasedMultiPersonProcessor
 from app.ml.measurement_extractor_v2 import EnhancedMeasurementExtractor
@@ -25,10 +25,121 @@ logger = logging.getLogger(__name__)
 
 # Thread pool for CPU-bound ML operations
 # This prevents blocking the async event loop
-_ml_thread_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="ml_worker")
+# Increased to handle more concurrent requests
+_ml_thread_pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="ml_worker")
+
+# Separate thread pool for database operations
+_db_thread_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="db_worker")
 
 # Request timeout in seconds
 REQUEST_TIMEOUT_SECONDS = 120
+
+
+# ============================================================================
+# MODEL CACHING - Singleton instances to avoid reloading on every request
+# ============================================================================
+_cached_pose_detector = None
+_cached_processor = None
+_model_lock = asyncio.Lock()
+
+
+def get_cached_pose_detector():
+    """Get or create a cached PoseDetector instance"""
+    global _cached_pose_detector
+    if _cached_pose_detector is None:
+        _cached_pose_detector = PoseDetector()
+        logger.info("Created cached PoseDetector instance")
+    return _cached_pose_detector
+
+
+def get_cached_processor(use_ml_ratios: bool = True):
+    """Get or create a cached DepthBasedMultiPersonProcessor instance"""
+    global _cached_processor
+    if _cached_processor is None:
+        _cached_processor = DepthBasedMultiPersonProcessor(
+            yolo_model_size=settings.YOLO_MODEL_SIZE,
+            yolo_confidence=settings.YOLO_CONFIDENCE_THRESHOLD,
+            pose_confidence=settings.CONFIDENCE_THRESHOLD,
+            custom_validation_thresholds={
+                "head": settings.BODY_VALIDATION_HEAD_THRESHOLD,
+                "shoulders": settings.BODY_VALIDATION_SHOULDERS_THRESHOLD,
+                "elbows": settings.BODY_VALIDATION_ELBOWS_THRESHOLD,
+                "hands": settings.BODY_VALIDATION_HANDS_THRESHOLD,
+                "torso": settings.BODY_VALIDATION_TORSO_THRESHOLD,
+                "legs": settings.BODY_VALIDATION_LEGS_THRESHOLD,
+                "feet": settings.BODY_VALIDATION_FEET_THRESHOLD,
+                "overall_min": settings.BODY_VALIDATION_OVERALL_MIN,
+            },
+            use_ml_ratios=use_ml_ratios,
+        )
+        logger.info("Created cached DepthBasedMultiPersonProcessor instance")
+    return _cached_processor
+
+
+def convert_landmarks_to_schema(pose_landmarks, image_width: int, image_height: int) -> PoseLandmarksSchema:
+    """Convert ML pose landmarks to API schema format"""
+    if pose_landmarks is None:
+        return None
+
+    # MediaPipe pose landmark indices
+    LANDMARK_INDICES = {
+        "NOSE": 0,
+        "LEFT_EYE": 2,
+        "RIGHT_EYE": 5,
+        "LEFT_SHOULDER": 11,
+        "RIGHT_SHOULDER": 12,
+        "LEFT_ELBOW": 13,
+        "RIGHT_ELBOW": 14,
+        "LEFT_WRIST": 15,
+        "RIGHT_WRIST": 16,
+        "LEFT_HIP": 23,
+        "RIGHT_HIP": 24,
+        "LEFT_KNEE": 25,
+        "RIGHT_KNEE": 26,
+        "LEFT_ANKLE": 27,
+        "RIGHT_ANKLE": 28,
+    }
+
+    def to_landmark(name: str) -> PoseLandmarkSchema:
+        idx = LANDMARK_INDICES.get(name)
+        if idx is None or idx >= len(pose_landmarks.landmarks):
+            return None
+        lm = pose_landmarks.landmarks[idx]
+        # Landmarks are stored as dictionaries with x, y in pixel coordinates
+        # Normalize back to 0-1 range for the API response
+        return PoseLandmarkSchema(
+            x=lm["x"] / pose_landmarks.image_width,
+            y=lm["y"] / pose_landmarks.image_height,
+            visibility=lm["visibility"]
+        )
+
+    return PoseLandmarksSchema(
+        nose=to_landmark("NOSE"),
+        left_eye=to_landmark("LEFT_EYE"),
+        right_eye=to_landmark("RIGHT_EYE"),
+        left_shoulder=to_landmark("LEFT_SHOULDER"),
+        right_shoulder=to_landmark("RIGHT_SHOULDER"),
+        left_elbow=to_landmark("LEFT_ELBOW"),
+        right_elbow=to_landmark("RIGHT_ELBOW"),
+        left_wrist=to_landmark("LEFT_WRIST"),
+        right_wrist=to_landmark("RIGHT_WRIST"),
+        left_hip=to_landmark("LEFT_HIP"),
+        right_hip=to_landmark("RIGHT_HIP"),
+        left_knee=to_landmark("LEFT_KNEE"),
+        right_knee=to_landmark("RIGHT_KNEE"),
+        left_ankle=to_landmark("LEFT_ANKLE"),
+        right_ankle=to_landmark("RIGHT_ANKLE"),
+    )
+
+
+def convert_bbox_to_schema(bbox, image_width: int, image_height: int) -> BoundingBoxSchema:
+    """Convert bounding box to normalized API schema format"""
+    return BoundingBoxSchema(
+        x1=bbox.x1 / image_width,
+        y1=bbox.y1 / image_height,
+        x2=bbox.x2 / image_width,
+        y2=bbox.y2 / image_height,
+    )
 
 
 async def check_client_disconnected(request: Request) -> bool:
@@ -143,9 +254,27 @@ async def process_measurement(
         )
 
     try:
-        # Step 1: Detect pose landmarks
-        detector = PoseDetector()
-        pose_landmarks = detector.detect_from_array(image)
+        # Define ML processing function to run in thread pool
+        def run_single_person_ml():
+            """CPU-bound ML processing - runs in thread pool"""
+            # Step 1: Detect pose landmarks (using cached detector)
+            detector = get_cached_pose_detector()
+            pose_landmarks = detector.detect_from_array(image)
+
+            if pose_landmarks is None:
+                return None, None
+
+            # Step 2: Extract measurements (with circumferences)
+            extractor = EnhancedMeasurementExtractor(reference_height_cm=settings.DEFAULT_HEIGHT_CM)
+            body_measurements = extractor.extract_measurements(pose_landmarks)
+
+            return pose_landmarks, body_measurements
+
+        # Run ML processing in thread pool to avoid blocking event loop
+        pose_landmarks, body_measurements = await run_ml_task_with_timeout(
+            run_single_person_ml,
+            timeout=REQUEST_TIMEOUT_SECONDS
+        )
 
         if pose_landmarks is None:
             raise HTTPException(
@@ -153,43 +282,46 @@ async def process_measurement(
                 detail="Could not detect body pose in image. Please ensure the image shows a full body in clear view.",
             )
 
-        # Step 2: Extract measurements (with circumferences)
-        extractor = EnhancedMeasurementExtractor(reference_height_cm=settings.DEFAULT_HEIGHT_CM)
-        body_measurements = extractor.extract_measurements(pose_landmarks)
+        # Step 3: Recommend size (product-aware with v3) - runs in thread pool for DB access
+        def get_size_recommendation():
+            recommender = ProductAwareSizeRecommender(db_session=db)
+            return recommender.recommend_size(
+                measurements=body_measurements,
+                gender=body_measurements.gender,
+                age_group=body_measurements.age_group,
+                demographic_label=body_measurements.demographic_label,
+                product_id=product_id,
+                fit_preference=fit_preference,
+            )
 
-        # Step 3: Recommend size (product-aware with v3)
-        recommender = ProductAwareSizeRecommender(db_session=db)
-        size_recommendation = recommender.recommend_size(
-            measurements=body_measurements,
-            gender=body_measurements.gender,
-            age_group=body_measurements.age_group,
-            demographic_label=body_measurements.demographic_label,
-            product_id=product_id,
-            fit_preference=fit_preference,
-        )
+        loop = asyncio.get_event_loop()
+        size_recommendation = await loop.run_in_executor(_db_thread_pool, get_size_recommendation)
 
         # Calculate processing time
         processing_time_ms = (time.time() - start_time) * 1000
 
-        # Save measurement to database
-        measurement_record = Measurement(
-            brand_id=brand.id,
-            product_id=product_id if product_id else None,  # NEW: Save product association
-            shoulder_width=body_measurements.shoulder_width,
-            chest_width=body_measurements.chest_width,
-            waist_width=body_measurements.waist_width,
-            hip_width=body_measurements.hip_width,
-            inseam=body_measurements.inseam,
-            arm_length=body_measurements.arm_length,
-            confidence_scores=body_measurements.confidence_scores,
-            recommended_size=size_recommendation.recommended_size,
-            size_probabilities=size_recommendation.size_probabilities,
-            processing_time_ms=processing_time_ms,
-        )
+        # Save measurement to database (run in thread pool)
+        def save_to_db():
+            measurement_record = Measurement(
+                brand_id=brand.id,
+                product_id=product_id if product_id else None,
+                shoulder_width=body_measurements.shoulder_width,
+                chest_width=body_measurements.chest_width,
+                waist_width=body_measurements.waist_width,
+                hip_width=body_measurements.hip_width,
+                inseam=body_measurements.inseam,
+                arm_length=body_measurements.arm_length,
+                confidence_scores=body_measurements.confidence_scores,
+                recommended_size=size_recommendation.recommended_size,
+                size_probabilities=size_recommendation.size_probabilities,
+                processing_time_ms=processing_time_ms,
+            )
+            db.add(measurement_record)
+            db.commit()
+            db.refresh(measurement_record)
+            return measurement_record
 
-        db.add(measurement_record)
-        db.commit()
-        db.refresh(measurement_record)
+        await loop.run_in_executor(_db_thread_pool, save_to_db)
 
         # Return response
         return MeasurementResponse(
@@ -293,22 +425,8 @@ async def process_multi_person_measurement(
         # (ML-enhanced for better accuracy)
         def run_ml_processing():
             """CPU-bound ML processing function to run in thread pool"""
-            processor = DepthBasedMultiPersonProcessor(
-                yolo_model_size=settings.YOLO_MODEL_SIZE,
-                yolo_confidence=settings.YOLO_CONFIDENCE_THRESHOLD,
-                pose_confidence=settings.CONFIDENCE_THRESHOLD,
-                custom_validation_thresholds={
-                    "head": settings.BODY_VALIDATION_HEAD_THRESHOLD,
-                    "shoulders": settings.BODY_VALIDATION_SHOULDERS_THRESHOLD,
-                    "elbows": settings.BODY_VALIDATION_ELBOWS_THRESHOLD,
-                    "hands": settings.BODY_VALIDATION_HANDS_THRESHOLD,
-                    "torso": settings.BODY_VALIDATION_TORSO_THRESHOLD,
-                    "legs": settings.BODY_VALIDATION_LEGS_THRESHOLD,
-                    "feet": settings.BODY_VALIDATION_FEET_THRESHOLD,
-                    "overall_min": settings.BODY_VALIDATION_OVERALL_MIN,
-                },
-                use_ml_ratios=use_ml_ratios,
-            )
+            # Use cached processor to avoid reloading models
+            processor = get_cached_processor(use_ml_ratios=use_ml_ratios)
             return processor.process_image(image)
 
         # Run ML processing in thread pool with timeout
@@ -403,9 +521,21 @@ async def process_multi_person_measurement(
                 ),
             )
 
+        # Get image dimensions for normalization
+        image_height, image_width = image.shape[:2]
+
         # Convert to response format
         measurement_responses = []
         for pm in result.measurements:
+            # Convert landmarks and bounding box for visualization
+            pose_landmarks_schema = convert_landmarks_to_schema(
+                pm.pose_landmarks, image_width, image_height
+            ) if pm.pose_landmarks else None
+
+            bbox_schema = convert_bbox_to_schema(
+                pm.bounding_box, image_width, image_height
+            ) if pm.bounding_box else None
+
             person_response = PersonMeasurementResponse(
                 person_id=pm.person_id,
                 detection_confidence=pm.detection_confidence,
@@ -435,10 +565,14 @@ async def process_multi_person_measurement(
                 pose_angle_degrees=pm.body_measurements.pose_angle_degrees if pm.body_measurements else None,
                 recommended_size=pm.size_recommendation.recommended_size if pm.size_recommendation else None,
                 size_probabilities=pm.size_recommendation.size_probabilities if pm.size_recommendation else None,
+                # Visualization data
+                bounding_box=bbox_schema,
+                pose_landmarks=pose_landmarks_schema,
             )
             measurement_responses.append(person_response)
 
         # Save to database (save the first valid person to maintain compatibility)
+        # Run in thread pool to avoid blocking event loop
         if measurement_responses:
             first_person = measurement_responses[0]
             if first_person.is_valid:
@@ -465,22 +599,27 @@ async def process_multi_person_measurement(
                         "confidence": 0.75,
                     }
 
-                measurement_record = Measurement(
-                    brand_id=brand.id,
-                    shoulder_width=first_person.shoulder_width,
-                    chest_width=first_person.chest_width,
-                    waist_width=first_person.waist_width,
-                    hip_width=first_person.hip_width,
-                    inseam=first_person.inseam,
-                    arm_length=first_person.arm_length,
-                    confidence_scores=first_person.body_part_confidences,
-                    recommended_size=first_person.recommended_size,
-                    size_probabilities=first_person.size_probabilities,
-                    processing_time_ms=processing_time_ms,
-                    used_ml_ratios=ml_metadata,  # NEW: Track ML usage
-                )
-                db.add(measurement_record)
-                db.commit()
+                # Run DB operations in thread pool
+                def save_multi_person_to_db():
+                    measurement_record = Measurement(
+                        brand_id=brand.id,
+                        shoulder_width=first_person.shoulder_width,
+                        chest_width=first_person.chest_width,
+                        waist_width=first_person.waist_width,
+                        hip_width=first_person.hip_width,
+                        inseam=first_person.inseam,
+                        arm_length=first_person.arm_length,
+                        confidence_scores=first_person.body_part_confidences,
+                        recommended_size=first_person.recommended_size,
+                        size_probabilities=first_person.size_probabilities,
+                        processing_time_ms=processing_time_ms,
+                        used_ml_ratios=ml_metadata,
+                    )
+                    db.add(measurement_record)
+                    db.commit()
+
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(_db_thread_pool, save_multi_person_to_db)
 
         # Return multi-person response
         return MultiPersonMeasurementResponse(
@@ -499,3 +638,75 @@ async def process_multi_person_measurement(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error processing image: {str(e)}",
         )
+
+
+
+# ============================================================================
+# BATCH PROCESSING HELPER
+# ============================================================================
+
+def process_image_sync(image_content: bytes, api_key: str, use_ml_ratios: bool = True) -> dict:
+    """
+    Synchronous helper function for batch processing.
+    This is called from batch.py in a thread pool.
+
+    Args:
+        image_content: Raw image bytes
+        api_key: API key (for future use in rate limiting)
+        use_ml_ratios: Whether to use ML-enhanced measurements
+
+    Returns:
+        Dictionary with measurement results
+    """
+    import cv2
+    import numpy as np
+    import time
+
+    start_time = time.time()
+
+    # Decode image
+    nparr = np.frombuffer(image_content, np.uint8)
+    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+    if image is None:
+        raise ValueError("Could not decode image")
+
+    # Get cached processor
+    processor = get_cached_processor(use_ml_ratios=use_ml_ratios)
+    result = processor.process_image(image)
+
+    processing_time_ms = (time.time() - start_time) * 1000
+
+    # Convert to dictionary format
+    measurements = []
+    for pm in result.measurements:
+        measurements.append({
+            "person_id": pm.person_id,
+            "is_valid": pm.is_valid,
+            "gender": pm.gender,
+            "age_group": pm.age_group,
+            "demographic_label": pm.demographic_label,
+            "shoulder_width": pm.body_measurements.shoulder_width_cm if pm.body_measurements else None,
+            "chest_width": pm.body_measurements.chest_width_cm if pm.body_measurements else None,
+            "waist_width": pm.body_measurements.waist_width_cm if pm.body_measurements else None,
+            "hip_width": pm.body_measurements.hip_width_cm if pm.body_measurements else None,
+            "inseam": pm.body_measurements.inseam_cm if pm.body_measurements else None,
+            "arm_length": pm.body_measurements.arm_length_cm if pm.body_measurements else None,
+            "chest_circumference": pm.body_measurements.chest_circumference_cm if pm.body_measurements else None,
+            "waist_circumference": pm.body_measurements.waist_circumference_cm if pm.body_measurements else None,
+            "hip_circumference": pm.body_measurements.hip_circumference_cm if pm.body_measurements else None,
+            "estimated_height_cm": pm.body_measurements.estimated_height_cm if pm.body_measurements else None,
+            "recommended_size": pm.size_recommendation.recommended_size if pm.size_recommendation else None,
+            "size_probabilities": pm.size_recommendation.probabilities if pm.size_recommendation else None,
+            "detection_confidence": pm.detection_confidence,
+            "validation_confidence": pm.validation_result.overall_confidence if pm.validation_result else 0,
+        })
+
+    return {
+        "total_people_detected": result.total_people_detected,
+        "valid_people_count": result.valid_people_count,
+        "invalid_people_count": result.invalid_people_count,
+        "measurements": measurements,
+        "processing_time_ms": processing_time_ms,
+    }
+

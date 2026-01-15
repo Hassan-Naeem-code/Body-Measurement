@@ -8,6 +8,7 @@ import type { MultiPersonMeasurementResult } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import axios from 'axios';
+import { useNavigationGuardContext } from '@/contexts/NavigationGuardContext';
 import {
   Upload,
   X,
@@ -23,7 +24,13 @@ import {
   Users,
   BadgeCheck,
   AlertTriangle,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
+import { MeasurementVisualization } from '@/components/measurement-visualization';
+import { PDFExportButton } from '@/components/pdf-export-button';
+import { CameraCapture } from '@/components/camera-capture';
+import { SizeRecommendations } from '@/components/size-recommendations';
 
 // Utility function to format file size
 const formatFileSize = (bytes: number): string => {
@@ -50,6 +57,19 @@ export default function UploadPage() {
   const [error, setError] = useState('');
   const [dragActive, setDragActive] = useState(false);
 
+  // Visualization options
+  const [showVisualization, setShowVisualization] = useState(true);
+  const [showSkeleton, setShowSkeleton] = useState(true);
+  const [showMeasurements, setShowMeasurements] = useState(true);
+  const [showBoundingBox, setShowBoundingBox] = useState(true);
+  const [selectedPersonId, setSelectedPersonId] = useState<number | undefined>(undefined);
+
+  // Camera capture
+  const [showCamera, setShowCamera] = useState(false);
+
+  // Navigation guard context
+  const { setNavigationBlocked } = useNavigationGuardContext();
+
   // AbortController ref for cancelling requests
   const abortControllerRef = useRef<AbortController | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -69,6 +89,19 @@ export default function UploadPage() {
       cancelPendingRequest();
     };
   }, [cancelPendingRequest]);
+
+  // Block navigation when processing is in progress
+  useEffect(() => {
+    setNavigationBlocked(
+      loading,
+      'Your image is still being processed. If you leave now, you will lose your results. Are you sure you want to leave?'
+    );
+
+    // Cleanup: unblock navigation when component unmounts
+    return () => {
+      setNavigationBlocked(false);
+    };
+  }, [loading, setNavigationBlocked]);
 
   // Handle drag events
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -222,19 +255,29 @@ export default function UploadPage() {
                 </p>
               </div>
 
-              <label className="cursor-pointer">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileSelect}
-                  className="hidden"
-                />
-                <span className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary-hover active:bg-primary-active transition-all duration-200 shadow-sm hover:shadow-md">
-                  <Upload className="w-5 h-5" />
-                  Select Image
-                </span>
-              </label>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <label className="cursor-pointer">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                  <span className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-xl font-medium hover:bg-primary-hover active:bg-primary-active transition-all duration-200 shadow-sm hover:shadow-md">
+                    <Upload className="w-5 h-5" />
+                    Select Image
+                  </span>
+                </label>
+
+                <button
+                  onClick={() => setShowCamera(true)}
+                  className="inline-flex items-center gap-2 px-6 py-3 border-2 border-primary text-primary rounded-xl font-medium hover:bg-primary-muted transition-all duration-200"
+                >
+                  <Camera className="w-5 h-5" />
+                  Use Camera
+                </button>
+              </div>
 
               <div className="flex items-center gap-6 text-sm text-muted-foreground">
                 <span className="flex items-center gap-2">
@@ -365,6 +408,124 @@ export default function UploadPage() {
       {/* Results Display */}
       {result && (
         <div className="space-y-6 animate-slide-up">
+          {/* Visualization Section */}
+          {previewUrl && result.measurements.length > 0 && (
+            <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-card">
+              {/* Visualization Header */}
+              <div className="p-4 border-b border-border bg-muted/30 flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <Eye className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-foreground">Body Measurement Visualization</h3>
+                    <p className="text-sm text-muted-foreground">See where measurements were taken</p>
+                  </div>
+                </div>
+
+                {/* Toggle Controls */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => setShowVisualization(!showVisualization)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                      showVisualization
+                        ? 'bg-primary text-white'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                    }`}
+                  >
+                    {showVisualization ? 'Hide' : 'Show'} Overlay
+                  </button>
+                  {showVisualization && (
+                    <>
+                      <button
+                        onClick={() => setShowSkeleton(!showSkeleton)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                          showSkeleton
+                            ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                        }`}
+                      >
+                        Skeleton
+                      </button>
+                      <button
+                        onClick={() => setShowMeasurements(!showMeasurements)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                          showMeasurements
+                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                        }`}
+                      >
+                        Measurements
+                      </button>
+                      <button
+                        onClick={() => setShowBoundingBox(!showBoundingBox)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                          showBoundingBox
+                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                        }`}
+                      >
+                        Bounding Box
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Visualization Canvas */}
+              <div className="p-4">
+                {showVisualization ? (
+                  <MeasurementVisualization
+                    imageUrl={previewUrl}
+                    measurements={result.measurements}
+                    selectedPersonId={selectedPersonId}
+                    showSkeleton={showSkeleton}
+                    showMeasurements={showMeasurements}
+                    showBoundingBox={showBoundingBox}
+                  />
+                ) : (
+                  <div className="relative w-full aspect-auto">
+                    <img
+                      src={previewUrl}
+                      alt="Uploaded image"
+                      className="w-full h-auto rounded-lg max-h-[80vh] object-contain"
+                    />
+                  </div>
+                )}
+
+                {/* Person Selector (if multiple people) */}
+                {result.measurements.length > 1 && (
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-muted-foreground mr-2">Show person:</span>
+                    <button
+                      onClick={() => setSelectedPersonId(undefined)}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                        selectedPersonId === undefined
+                          ? 'bg-primary text-white'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                      }`}
+                    >
+                      All
+                    </button>
+                    {result.measurements.map((person) => (
+                      <button
+                        key={person.person_id}
+                        onClick={() => setSelectedPersonId(person.person_id)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                          selectedPersonId === person.person_id
+                            ? 'bg-primary text-white'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                        }`}
+                      >
+                        Person {person.person_id + 1}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Summary Banner */}
           <div className="relative overflow-hidden rounded-2xl gradient-success p-6 lg:p-8 text-white">
             <div className="absolute inset-0 opacity-10">
@@ -399,8 +560,15 @@ export default function UploadPage() {
                   </span>
                 </div>
               </div>
-              <div className="hidden sm:flex items-center justify-center w-20 h-20 rounded-2xl bg-white/10 backdrop-blur-sm">
-                <CheckCircle2 className="w-10 h-10" />
+              <div className="flex items-center gap-4">
+                <PDFExportButton
+                  result={result}
+                  variant="secondary"
+                  className="bg-white/20 hover:bg-white/30 border-white/30 text-white"
+                />
+                <div className="hidden sm:flex items-center justify-center w-20 h-20 rounded-2xl bg-white/10 backdrop-blur-sm">
+                  <CheckCircle2 className="w-10 h-10" />
+                </div>
               </div>
             </div>
           </div>
@@ -557,6 +725,9 @@ export default function UploadPage() {
                       </div>
                     </div>
                   )}
+
+                  {/* Product Size Recommendations */}
+                  <SizeRecommendations measurements={person} />
                 </div>
               ) : (
                 <div className="p-6">
@@ -589,8 +760,17 @@ export default function UploadPage() {
               <Upload className="w-4 h-4 mr-2" />
               Upload Another Image
             </Button>
+            <PDFExportButton result={result} />
           </div>
         </div>
+      )}
+
+      {/* Camera Capture Modal */}
+      {showCamera && (
+        <CameraCapture
+          onCapture={handleFile}
+          onClose={() => setShowCamera(false)}
+        />
       )}
     </div>
   );

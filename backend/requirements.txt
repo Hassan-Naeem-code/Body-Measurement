@@ -21,7 +21,7 @@ python-multipart==0.0.6
 bcrypt==4.1.2
 
 # AI & Computer Vision
-mediapipe==0.10.9
+mediapipe>=0.10.9
 opencv-python==4.9.0.80
 numpy==1.26.3
 pillow==10.2.0

@@ -5,7 +5,7 @@ from pydantic import field_validator
 
 class Settings(BaseSettings):
     # API Settings
-    PROJECT_NAME: str = "Body Measurement API"
+    PROJECT_NAME: str = "FitWhisperer API"
     API_V1_PREFIX: str = "/api/v1"
     VERSION: str = "1.0.0"
 

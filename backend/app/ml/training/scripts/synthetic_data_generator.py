@@ -292,6 +292,7 @@ class AnthropometricModel:
         height = measurements['height']
         shoulder_width = measurements['shoulder_width']
         hip_width = measurements['hip_circumference'] / np.pi / 2  # Approximate width from circumference
+        arm_length = measurements['arm_length']
 
         # Add some noise to simulate real detection
         noise = lambda: random.uniform(-0.02, 0.02)
@@ -299,6 +300,8 @@ class AnthropometricModel:
         # Vertical positions (normalized to body height)
         nose_y = 0.05 + noise()
         shoulder_y = 0.18 + noise()
+        elbow_y = 0.36 + noise()  # Elbows at ~36% of height
+        wrist_y = 0.50 + noise()  # Wrists at ~50% of height
         hip_y = 0.52 + noise()
         knee_y = 0.75 + noise()
         ankle_y = 0.95 + noise()
@@ -308,10 +311,19 @@ class AnthropometricModel:
         shoulder_offset = (shoulder_width / height) / 2
         hip_offset = (hip_width / height) / 2
 
+        # Arm positions - slightly outside shoulders, hanging naturally
+        arm_offset = shoulder_offset + 0.02  # Arms slightly outside shoulders
+        elbow_offset = shoulder_offset + 0.05
+        wrist_offset = shoulder_offset + 0.03
+
         landmarks = {
             'nose': {'x': center_x + noise(), 'y': nose_y, 'visibility': 0.95 + noise() * 0.5},
             'left_shoulder': {'x': center_x - shoulder_offset + noise(), 'y': shoulder_y, 'visibility': 0.92 + noise() * 0.5},
             'right_shoulder': {'x': center_x + shoulder_offset + noise(), 'y': shoulder_y, 'visibility': 0.92 + noise() * 0.5},
+            'left_elbow': {'x': center_x - elbow_offset + noise(), 'y': elbow_y, 'visibility': 0.88 + noise() * 0.5},
+            'right_elbow': {'x': center_x + elbow_offset + noise(), 'y': elbow_y, 'visibility': 0.88 + noise() * 0.5},
+            'left_wrist': {'x': center_x - wrist_offset + noise(), 'y': wrist_y, 'visibility': 0.85 + noise() * 0.5},
+            'right_wrist': {'x': center_x + wrist_offset + noise(), 'y': wrist_y, 'visibility': 0.85 + noise() * 0.5},
             'left_hip': {'x': center_x - hip_offset + noise(), 'y': hip_y, 'visibility': 0.88 + noise() * 0.5},
             'right_hip': {'x': center_x + hip_offset + noise(), 'y': hip_y, 'visibility': 0.88 + noise() * 0.5},
             'left_knee': {'x': center_x - hip_offset * 0.9 + noise(), 'y': knee_y, 'visibility': 0.85 + noise() * 0.5},

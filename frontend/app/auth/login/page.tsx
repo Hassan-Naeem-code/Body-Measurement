@@ -26,18 +26,13 @@ export default function LoginPage() {
 
     try {
       const response = await authAPI.login(formData);
-
-      // Store authentication data
       authHelpers.setToken(response.access_token);
       authHelpers.setApiKey(response.brand.api_key);
       authHelpers.setBrand(response.brand);
-
-      // Redirect to dashboard
       router.push('/dashboard');
     } catch (err: unknown) {
       const error = err as { response?: { data?: { detail?: string } } };
       setError(error.response?.data?.detail || 'Login failed. Please check your credentials.');
-      console.error('Login error:', err);
     } finally {
       setLoading(false);
     }
@@ -51,9 +46,9 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-white flex">
       {/* Left side - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 gradient-primary relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-1/2 bg-indigo-600 relative overflow-hidden">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-20 left-20 w-96 h-96 bg-white rounded-full blur-3xl" />
           <div className="absolute bottom-20 right-20 w-64 h-64 bg-white rounded-full blur-3xl" />
@@ -62,7 +57,7 @@ export default function LoginPage() {
           <div className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center mb-8">
             <Sparkles className="w-10 h-10" />
           </div>
-          <h1 className="text-4xl font-bold mb-4">Body Measurement API</h1>
+          <h1 className="text-4xl font-bold mb-4">FitWhisperer</h1>
           <p className="text-xl text-white/80 max-w-md">
             AI-powered body measurements for accurate size recommendations
           </p>
@@ -85,39 +80,36 @@ export default function LoginPage() {
 
       {/* Right side - Form */}
       <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
-        <div className="w-full max-w-md space-y-8 animate-fade-in">
+        <div className="w-full max-w-md space-y-8">
           {/* Mobile logo */}
           <div className="lg:hidden flex justify-center mb-8">
-            <div className="w-14 h-14 rounded-xl gradient-primary flex items-center justify-center shadow-lg">
+            <div className="w-14 h-14 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg">
               <Sparkles className="w-7 h-7 text-white" />
             </div>
           </div>
 
           {/* Header */}
           <div className="text-center lg:text-left">
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">
               Welcome back
             </h1>
-            <p className="text-muted-foreground mt-2">
+            <p className="text-gray-500 mt-2">
               Sign in to your account to continue
             </p>
           </div>
 
           {/* Error Message */}
           {error && (
-            <div className="flex items-center gap-3 p-4 rounded-xl bg-destructive-muted border border-destructive/20 animate-slide-up">
-              <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0" />
-              <p className="text-sm text-foreground">{error}</p>
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-red-50 border border-red-200">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+              <p className="text-sm text-gray-900">{error}</p>
             </div>
           )}
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
-              <label
-                htmlFor="email"
-                className="block text-sm font-medium text-foreground"
-              >
+              <label htmlFor="email" className="block text-sm font-medium text-gray-900">
                 Email Address
               </label>
               <Input
@@ -133,10 +125,7 @@ export default function LoginPage() {
             </div>
 
             <div className="space-y-2">
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-foreground"
-              >
+              <label htmlFor="password" className="block text-sm font-medium text-gray-900">
                 Password
               </label>
               <div className="relative">
@@ -154,24 +143,15 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                   tabIndex={-1}
                 >
-                  {showPassword ? (
-                    <EyeOff className="w-5 h-5" />
-                  ) : (
-                    <Eye className="w-5 h-5" />
-                  )}
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
 
-            <Button
-              type="submit"
-              disabled={loading}
-              loading={loading}
-              className="w-full h-12 text-base"
-            >
+            <Button type="submit" disabled={loading} loading={loading} className="w-full h-12 text-base">
               {!loading && (
                 <>
                   Sign In
@@ -184,12 +164,9 @@ export default function LoginPage() {
 
           {/* Footer */}
           <div className="text-center">
-            <p className="text-muted-foreground">
+            <p className="text-gray-500">
               Don&apos;t have an account?{' '}
-              <Link
-                href="/auth/register"
-                className="text-primary font-semibold hover:text-primary-hover transition-colors"
-              >
+              <Link href="/auth/register" className="text-indigo-600 font-semibold hover:text-indigo-700 transition-colors">
                 Create one
               </Link>
             </p>

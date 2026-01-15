@@ -1,4 +1,4 @@
-# Body Measurement Mobile SDKs
+# FitWhisperer Mobile SDKs
 
 Multi-platform SDKs for integrating AI-powered body measurement and size recommendation into your mobile applications.
 
@@ -17,21 +17,21 @@ Choose your platform and follow the respective SDK documentation:
 
 ### React Native
 ```bash
-npm install @body-measurement/react-native-sdk
+npm install @fitwhisperer/react-native-sdk
 ```
 [View React Native Documentation →](packages/react-native/README.md)
 
 ### Flutter
 ```yaml
 dependencies:
-  body_measurement_sdk: ^1.0.0
+  fitwhisperer_sdk: ^1.0.0
 ```
 [View Flutter Documentation →](packages/flutter/README.md)
 
 ### iOS (Swift Package Manager)
 ```swift
 dependencies: [
-    .package(url: "https://github.com/your-org/body-measurement-ios-sdk", from: "1.0.0")
+    .package(url: "https://github.com/fitwhisperer/ios-sdk", from: "1.0.0")
 ]
 ```
 [View iOS Documentation →](packages/ios/README.md)
@@ -39,7 +39,7 @@ dependencies: [
 ### Android (Gradle)
 ```gradle
 dependencies {
-    implementation 'com.bodymeasurement:sdk:1.0.0'
+    implementation 'com.fitwhisperer:sdk:1.0.0'
 }
 ```
 [View Android Documentation →](packages/android/README.md)
@@ -121,7 +121,7 @@ https://dashboard.yourdomain.com/api-keys
 
 ## 📄 License
 
-MIT © Body Measurement Platform
+MIT © FitWhisperer
 
 See individual package licenses for more details.
 
@@ -139,4 +139,4 @@ https://docs.yourdomain.com/changelog
 
 ---
 
-Made with ❤️ by the Body Measurement Platform team
+Made with love by the FitWhisperer team

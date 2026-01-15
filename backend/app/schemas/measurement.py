@@ -4,6 +4,40 @@ from uuid import UUID
 from datetime import datetime
 
 
+class PoseLandmark(BaseModel):
+    """Single pose landmark with normalized coordinates"""
+    x: float = Field(..., description="Normalized X coordinate (0-1)")
+    y: float = Field(..., description="Normalized Y coordinate (0-1)")
+    visibility: float = Field(..., description="Visibility confidence (0-1)")
+
+
+class PoseLandmarks(BaseModel):
+    """Collection of pose landmarks for visualization"""
+    nose: Optional[PoseLandmark] = None
+    left_eye: Optional[PoseLandmark] = None
+    right_eye: Optional[PoseLandmark] = None
+    left_shoulder: Optional[PoseLandmark] = None
+    right_shoulder: Optional[PoseLandmark] = None
+    left_elbow: Optional[PoseLandmark] = None
+    right_elbow: Optional[PoseLandmark] = None
+    left_wrist: Optional[PoseLandmark] = None
+    right_wrist: Optional[PoseLandmark] = None
+    left_hip: Optional[PoseLandmark] = None
+    right_hip: Optional[PoseLandmark] = None
+    left_knee: Optional[PoseLandmark] = None
+    right_knee: Optional[PoseLandmark] = None
+    left_ankle: Optional[PoseLandmark] = None
+    right_ankle: Optional[PoseLandmark] = None
+
+
+class BoundingBox(BaseModel):
+    """Bounding box for a detected person"""
+    x1: float = Field(..., description="Top-left X (normalized 0-1)")
+    y1: float = Field(..., description="Top-left Y (normalized 0-1)")
+    x2: float = Field(..., description="Bottom-right X (normalized 0-1)")
+    y2: float = Field(..., description="Bottom-right Y (normalized 0-1)")
+
+
 class MeasurementResponse(BaseModel):
     shoulder_width: float
     chest_width: float
@@ -81,6 +115,10 @@ class PersonMeasurementResponse(BaseModel):
     # Size recommendation (null if validation failed)
     recommended_size: Optional[str] = None
     size_probabilities: Optional[Dict[str, float]] = None
+
+    # Visualization data
+    bounding_box: Optional[BoundingBox] = Field(None, description="Person bounding box for visualization")
+    pose_landmarks: Optional[PoseLandmarks] = Field(None, description="Pose landmarks for body outline visualization")
 
     class Config:
         from_attributes = True

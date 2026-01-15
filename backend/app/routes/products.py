@@ -516,3 +516,202 @@ def delete_size_chart(
     db.commit()
 
     return None
+
+
+# ===== Size Recommendation Endpoint =====
+
+from app.schemas.product import SizeRecommendationRequest, SizeRecommendationResponse
+
+@router.post("/products/{product_id}/recommend-size", response_model=SizeRecommendationResponse)
+def recommend_size(
+    product_id: UUID,
+    request: SizeRecommendationRequest,
+    db: Session = Depends(get_db),
+    current_brand: Brand = Depends(get_current_brand),
+):
+    """
+    Get size recommendation for a product based on body measurements
+
+    **Authentication**: Requires valid API key in X-API-Key header
+
+    **Path Parameters**:
+    - product_id: UUID of the product
+
+    **Request Body**:
+    - chest_circumference: Chest measurement in cm (optional)
+    - waist_circumference: Waist measurement in cm (optional)
+    - hip_circumference: Hip measurement in cm (optional)
+    - height: Height in cm (optional)
+    - fit_preference: Desired fit - tight, regular, loose (default: regular)
+
+    **Returns**:
+    - recommended_size: Best matching size
+    - confidence: Confidence score (0-1)
+    - size_scores: Fit scores for all sizes
+    - fit_quality: Quality assessment (perfect, good, acceptable, poor)
+    - alternative_sizes: Other sizes to consider
+    """
+    # Get product with size charts
+    product = db.query(Product).filter(
+        and_(
+            Product.id == product_id,
+            Product.brand_id == current_brand.id
+        )
+    ).first()
+
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Product {product_id} not found"
+        )
+
+    # Get size charts for this product
+    size_charts = db.query(SizeChart).filter(
+        SizeChart.product_id == product_id
+    ).order_by(SizeChart.display_order).all()
+
+    if not size_charts:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No size charts available for this product"
+        )
+
+    # Calculate fit scores for each size
+    size_scores = {}
+    for chart in size_charts:
+        score = chart.matches_measurements(
+            chest=request.chest_circumference,
+            waist=request.waist_circumference,
+            hip=request.hip_circumference,
+            height=request.height
+        )
+
+        # Adjust score based on fit preference
+        if request.fit_preference == "tight" and chart.fit_type == "tight":
+            score *= 0.8  # Prefer tight fit
+        elif request.fit_preference == "loose" and chart.fit_type == "loose":
+            score *= 0.8  # Prefer loose fit
+        elif request.fit_preference == "regular" and chart.fit_type == "regular":
+            score *= 0.9  # Slight preference for regular
+
+        size_scores[chart.size_name] = round(score, 2)
+
+    # Find best size (lowest score = best fit)
+    sorted_sizes = sorted(size_scores.items(), key=lambda x: x[1])
+    best_size = sorted_sizes[0][0]
+    best_score = sorted_sizes[0][1]
+
+    # Calculate confidence (inverse of score, normalized)
+    # Score of 0 = 100% confidence, score of 10+ = ~50% confidence
+    confidence = max(0.5, 1.0 - (best_score / 20.0))
+    confidence = min(1.0, confidence)
+
+    # Determine fit quality
+    if best_score < 1:
+        fit_quality = "perfect"
+    elif best_score < 3:
+        fit_quality = "good"
+    elif best_score < 6:
+        fit_quality = "acceptable"
+    else:
+        fit_quality = "poor"
+
+    # Get alternative sizes (next best options)
+    alternatives = [s[0] for s in sorted_sizes[1:3] if s[1] < best_score + 5]
+
+    # Get the fit type of the recommended size
+    recommended_chart = next((c for c in size_charts if c.size_name == best_size), None)
+    fit_type = recommended_chart.fit_type if recommended_chart else "regular"
+
+    return SizeRecommendationResponse(
+        recommended_size=best_size,
+        confidence=round(confidence, 2),
+        size_scores=size_scores,
+        fit_quality=fit_quality,
+        alternative_sizes=alternatives if alternatives else None,
+        product_name=product.name,
+        product_category=product.category,
+        fit_type=fit_type
+    )
+
+
+@router.post("/recommend-size-bulk")
+def recommend_size_bulk(
+    measurements: dict,
+    db: Session = Depends(get_db),
+    current_brand: Brand = Depends(get_current_brand),
+):
+    """
+    Get size recommendations for all products based on measurements
+
+    **Authentication**: Requires valid API key in X-API-Key header
+
+    **Request Body**:
+    - chest_circumference: Chest measurement in cm (optional)
+    - waist_circumference: Waist measurement in cm (optional)
+    - hip_circumference: Hip measurement in cm (optional)
+    - height: Height in cm (optional)
+    - fit_preference: Desired fit (default: regular)
+    - category: Filter by product category (optional)
+
+    **Returns**: List of size recommendations for all matching products
+    """
+    # Get all products for this brand
+    query = db.query(Product).filter(
+        and_(
+            Product.brand_id == current_brand.id,
+            Product.is_active == True
+        )
+    )
+
+    # Filter by category if provided
+    if measurements.get("category"):
+        query = query.filter(Product.category == measurements["category"])
+
+    products = query.all()
+
+    if not products:
+        return {"recommendations": [], "total": 0}
+
+    recommendations = []
+    for product in products:
+        size_charts = db.query(SizeChart).filter(
+            SizeChart.product_id == product.id
+        ).all()
+
+        if not size_charts:
+            continue
+
+        # Calculate best size for this product
+        size_scores = {}
+        for chart in size_charts:
+            score = chart.matches_measurements(
+                chest=measurements.get("chest_circumference"),
+                waist=measurements.get("waist_circumference"),
+                hip=measurements.get("hip_circumference"),
+                height=measurements.get("height")
+            )
+            size_scores[chart.size_name] = score
+
+        sorted_sizes = sorted(size_scores.items(), key=lambda x: x[1])
+        best_size = sorted_sizes[0][0]
+        best_score = sorted_sizes[0][1]
+
+        confidence = max(0.5, 1.0 - (best_score / 20.0))
+
+        recommendations.append({
+            "product_id": str(product.id),
+            "product_name": product.name,
+            "category": product.category,
+            "recommended_size": best_size,
+            "confidence": round(confidence, 2),
+            "fit_quality": "perfect" if best_score < 1 else "good" if best_score < 3 else "acceptable" if best_score < 6 else "poor"
+        })
+
+    # Sort by confidence (highest first)
+    recommendations.sort(key=lambda x: x["confidence"], reverse=True)
+
+    return {
+        "recommendations": recommendations,
+        "total": len(recommendations)
+    }

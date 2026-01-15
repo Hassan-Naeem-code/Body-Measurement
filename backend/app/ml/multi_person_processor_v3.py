@@ -26,6 +26,7 @@ class PersonMeasurement:
     size_recommendation: Optional[SizeRecommendation]
     demographic_info: Optional[DemographicInfo]  # Gender and age group
     bounding_box: PersonBoundingBox
+    pose_landmarks: Optional[PoseLandmarks] = None  # For visualization
 
 
 @dataclass
@@ -280,7 +281,8 @@ class DepthBasedMultiPersonProcessor:
             body_measurements=body_measurements,
             size_recommendation=size_recommendation,
             demographic_info=demographic_info,
-            bounding_box=bbox
+            bounding_box=bbox,
+            pose_landmarks=pose_landmarks  # For visualization
         )
 
     def _has_essential_measurement_parts(self, pose_landmarks: PoseLandmarks) -> bool:

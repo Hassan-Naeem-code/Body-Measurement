@@ -31,3 +31,4 @@ class Brand(Base):
     # Relationships
     measurements = relationship("Measurement", back_populates="brand", cascade="all, delete-orphan")
     products = relationship("Product", back_populates="brand", cascade="all, delete-orphan")
+    webhooks = relationship("Webhook", back_populates="brand", cascade="all, delete-orphan")

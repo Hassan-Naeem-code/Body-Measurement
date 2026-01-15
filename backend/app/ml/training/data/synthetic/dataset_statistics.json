@@ -1,53 +1,53 @@
 {
   "total_samples": 10000,
   "gender_distribution": {
-    "female": 5000,
-    "male": 5000
+    "male": 5000,
+    "female": 5000
   },
   "body_type_distribution": {
-    "slim": 1951,
-    "average": 4036,
-    "athletic": 2544,
-    "heavy": 1469
+    "heavy": 1481,
+    "average": 3949,
+    "athletic": 2598,
+    "slim": 1972
   },
   "size_distribution": {
-    "M": 1796,
-    "S": 1179,
-    "L": 2383,
-    "XS": 1519,
-    "XXL": 1362,
-    "XL": 1761
+    "XXL": 1417,
+    "L": 2294,
+    "XL": 1805,
+    "S": 1211,
+    "XS": 1468,
+    "M": 1805
   },
   "measurement_stats": {
     "height": {
-      "mean": 168.43,
-      "std": 9.49,
-      "min": 140.0,
-      "max": 200.9
+      "mean": 168.41,
+      "std": 9.41,
+      "min": 134.6,
+      "max": 200.6
     },
     "shoulder_width": {
-      "mean": 42.89,
+      "mean": 42.88,
       "std": 5.05,
-      "min": 31.2,
-      "max": 57.9
+      "min": 31.7,
+      "max": 57.2
     },
     "chest_circumference": {
-      "mean": 99.33,
-      "std": 13.99,
-      "min": 58.9,
-      "max": 148.8
+      "mean": 99.56,
+      "std": 14.04,
+      "min": 54.0,
+      "max": 145.9
     },
     "waist_circumference": {
-      "mean": 78.84,
-      "std": 16.3,
-      "min": 29.6,
-      "max": 137.6
+      "mean": 78.83,
+      "std": 16.19,
+      "min": 33.3,
+      "max": 132.8
     },
     "hip_circumference": {
-      "mean": 102.31,
-      "std": 9.69,
-      "min": 76.2,
-      "max": 133.6
+      "mean": 102.25,
+      "std": 9.83,
+      "min": 76.8,
+      "max": 133.7
     }
   }
 }

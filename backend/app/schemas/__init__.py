@@ -10,9 +10,21 @@ from app.schemas.measurement import (
     MeasurementRecord,
     PersonMeasurementResponse,
     MultiPersonMeasurementResponse,
+    PoseLandmark,
+    PoseLandmarks,
+    BoundingBox,
 )
 from app.schemas.product import ProductCreate, ProductResponse
-from app.schemas.analytics import Analytics, PopularProduct, RevenueImpact
+from app.schemas.analytics import (
+    Analytics,
+    PopularProduct,
+    RevenueImpact,
+    DailyMeasurementCount,
+    MeasurementTrend,
+    SizeDistributionOverTime,
+    MeasurementHistoryItem,
+    MeasurementHistoryResponse,
+)
 
 __all__ = [
     "BrandCreate",
@@ -24,9 +36,17 @@ __all__ = [
     "MeasurementRecord",
     "PersonMeasurementResponse",
     "MultiPersonMeasurementResponse",
+    "PoseLandmark",
+    "PoseLandmarks",
+    "BoundingBox",
     "ProductCreate",
     "ProductResponse",
     "Analytics",
     "PopularProduct",
     "RevenueImpact",
+    "DailyMeasurementCount",
+    "MeasurementTrend",
+    "SizeDistributionOverTime",
+    "MeasurementHistoryItem",
+    "MeasurementHistoryResponse",
 ]

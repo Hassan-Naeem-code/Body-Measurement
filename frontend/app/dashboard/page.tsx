@@ -13,43 +13,19 @@ import {
   Upload,
   ShoppingBag,
   LineChart,
-  Sparkles,
   ArrowRight,
-  CheckCircle2,
-  Rocket,
 } from 'lucide-react';
 
-// Utility function to format numbers
-const formatNumber = (num: number, decimals: number = 0): string => {
-  if (num >= 1000000) {
-    return (num / 1000000).toFixed(1) + 'M';
-  }
-  if (num >= 1000) {
-    return (num / 1000).toFixed(1) + 'K';
-  }
-  return num.toFixed(decimals);
+const formatNumber = (num: number): string => {
+  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+  return num.toString();
 };
 
-// Utility function to format processing time
-const formatProcessingTime = (ms: number): string => {
-  if (ms >= 1000) {
-    return (ms / 1000).toFixed(2) + 's';
-  }
+const formatTime = (ms: number): string => {
+  if (ms >= 1000) return (ms / 1000).toFixed(2) + 's';
   return Math.round(ms) + 'ms';
 };
-
-// Loading skeleton component
-const StatCardSkeleton = () => (
-  <div className="stat-card animate-pulse">
-    <div className="flex items-start justify-between">
-      <div className="space-y-3">
-        <div className="h-4 w-24 bg-muted rounded skeleton" />
-        <div className="h-8 w-16 bg-muted rounded skeleton" />
-      </div>
-      <div className="h-12 w-12 bg-muted rounded-xl skeleton" />
-    </div>
-  </div>
-);
 
 export default function DashboardPage() {
   const [usage, setUsage] = useState<UsageStats | null>(null);
@@ -74,9 +50,8 @@ export default function DashboardPage() {
       setBrand(brandData);
       const usageData = await brandAPI.getUsage(apiKey);
       setUsage(usageData);
-    } catch (err: unknown) {
+    } catch (err) {
       setError('Failed to load dashboard data');
-      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -84,38 +59,28 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6 animate-fade-in">
-        {/* Header Skeleton */}
-        <div className="space-y-2">
-          <div className="h-8 w-48 bg-muted rounded skeleton" />
-          <div className="h-5 w-64 bg-muted rounded skeleton" />
-        </div>
-
-        {/* Stats Grid Skeleton */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6">
-          {[...Array(4)].map((_, i) => (
-            <StatCardSkeleton key={i} />
+      <div className="space-y-6">
+        <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="bg-white rounded-xl border border-gray-200 p-5">
+              <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
+              <div className="h-8 w-16 mt-3 bg-gray-200 rounded animate-pulse" />
+            </div>
           ))}
         </div>
-
-        {/* Plan Skeleton */}
-        <div className="h-40 bg-muted rounded-2xl skeleton" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-4 p-8 rounded-2xl bg-destructive-muted border border-destructive/20 max-w-md">
-          <div className="w-16 h-16 mx-auto rounded-full bg-destructive/10 flex items-center justify-center">
-            <span className="text-destructive text-2xl">!</span>
-          </div>
-          <h3 className="text-lg font-semibold text-foreground">Something went wrong</h3>
-          <p className="text-muted-foreground">{error}</p>
+      <div className="flex items-center justify-center min-h-[300px]">
+        <div className="text-center p-6 bg-red-50 border border-red-200 rounded-xl max-w-md">
+          <p className="text-red-700">{error}</p>
           <button
             onClick={loadData}
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-hover transition-colors"
+            className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
           >
             Try again
           </button>
@@ -124,43 +89,34 @@ export default function DashboardPage() {
     );
   }
 
-  const usagePercentage = Math.min(
-    ((usage?.requests_this_month || 0) / (usage?.plan_limit || 1000)) * 100,
-    100
-  );
-
   const stats = [
     {
       label: 'Total Requests',
       value: formatNumber(usage?.total_requests || 0),
       icon: BarChart3,
-      color: 'primary',
-      bgColor: 'bg-primary-muted',
-      iconColor: 'text-primary',
+      bgColor: 'bg-indigo-100',
+      iconColor: 'text-indigo-600',
     },
     {
       label: 'Today',
       value: formatNumber(usage?.requests_today || 0),
       icon: Calendar,
-      color: 'info',
-      bgColor: 'bg-info-muted',
-      iconColor: 'text-info',
+      bgColor: 'bg-blue-100',
+      iconColor: 'text-blue-600',
     },
     {
       label: 'This Month',
       value: formatNumber(usage?.requests_this_month || 0),
       icon: TrendingUp,
-      color: 'success',
-      bgColor: 'bg-success-muted',
-      iconColor: 'text-success',
+      bgColor: 'bg-green-100',
+      iconColor: 'text-green-600',
     },
     {
       label: 'Avg Processing',
-      value: formatProcessingTime(usage?.average_processing_time || 0),
+      value: formatTime(usage?.average_processing_time || 0),
       icon: Zap,
-      color: 'warning',
-      bgColor: 'bg-warning-muted',
-      iconColor: 'text-warning',
+      bgColor: 'bg-amber-100',
+      iconColor: 'text-amber-600',
     },
   ];
 
@@ -170,64 +126,59 @@ export default function DashboardPage() {
       icon: Upload,
       title: 'Upload Image',
       description: 'Process body measurements',
-      gradient: 'from-primary to-primary-hover',
+      bgColor: 'bg-indigo-600',
     },
     {
       href: '/dashboard/products',
       icon: ShoppingBag,
       title: 'Manage Products',
       description: 'Add size charts',
-      gradient: 'from-success to-emerald-600',
+      bgColor: 'bg-green-600',
     },
     {
       href: '/dashboard/analytics',
       icon: LineChart,
       title: 'View Analytics',
       description: 'Track performance',
-      gradient: 'from-info to-cyan-600',
+      bgColor: 'bg-blue-600',
     },
   ];
 
+  const usagePercent = Math.min(((usage?.requests_this_month || 0) / (usage?.plan_limit || 1000)) * 100, 100);
+
   return (
-    <div className="space-y-6 lg:space-y-8 animate-fade-in">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl lg:text-3xl font-bold tracking-tight text-foreground">
-            Dashboard
-          </h1>
-          <p className="text-muted-foreground">
-            Welcome back, <span className="text-foreground font-medium">{brand?.name}</span>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-500 mt-1">
+            Welcome back, <span className="text-gray-900 font-medium">{brand?.name}</span>
           </p>
         </div>
         <Link
           href="/dashboard/upload"
-          className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary-hover active:bg-primary-active transition-all duration-200 shadow-sm hover:shadow-md group"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors"
         >
           <Upload className="w-4 h-4" />
-          <span>New Measurement</span>
-          <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
+          New Measurement
+          <ArrowRight className="w-4 h-4" />
         </Link>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 lg:gap-6">
-        {stats.map((stat, index) => (
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        {stats.map((stat) => (
           <div
             key={stat.label}
-            className="stat-card group"
-            style={{ animationDelay: `${index * 50}ms` }}
+            className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md transition-shadow"
           >
             <div className="flex items-start justify-between">
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
-                <p className="text-3xl lg:text-4xl font-bold tracking-tight text-foreground">
-                  {stat.value}
-                </p>
+              <div>
+                <p className="text-sm font-medium text-gray-500">{stat.label}</p>
+                <p className="text-3xl font-bold text-gray-900 mt-1">{stat.value}</p>
               </div>
-              <div
-                className={`icon-container icon-container-md ${stat.bgColor} transition-transform duration-200 group-hover:scale-110`}
-              >
+              <div className={`w-12 h-12 rounded-xl ${stat.bgColor} flex items-center justify-center`}>
                 <stat.icon className={`w-6 h-6 ${stat.iconColor}`} />
               </div>
             </div>
@@ -235,120 +186,48 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Plan Info Card */}
-      <div className="relative overflow-hidden rounded-2xl gradient-primary p-6 lg:p-8 text-white">
-        {/* Background Pattern */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2" />
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-white rounded-full blur-3xl transform -translate-x-1/2 translate-y-1/2" />
+      {/* Plan Usage - Compact */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-sm font-medium text-gray-500">Monthly Usage</p>
+            <p className="text-lg font-semibold text-gray-900">
+              {formatNumber(usage?.requests_this_month || 0)} / {formatNumber(usage?.plan_limit || 1000)} requests
+            </p>
+          </div>
+          <span className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm font-medium capitalize">
+            {brand?.subscription_tier || 'Free'} Plan
+          </span>
         </div>
-
-        <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div className="space-y-4 flex-1">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 rounded-full text-sm font-medium backdrop-blur-sm">
-              <Sparkles className="w-4 h-4" />
-              <span>Current Plan</span>
-            </div>
-            <div>
-              <h2 className="text-3xl lg:text-4xl font-bold capitalize">
-                {brand?.subscription_tier || 'Free'}
-              </h2>
-              <p className="text-white/80 mt-2">
-                {formatNumber(usage?.requests_this_month || 0)} / {formatNumber(usage?.plan_limit || 1000)} requests used this month
-              </p>
-            </div>
-
-            {/* Progress Bar */}
-            <div className="space-y-2 max-w-md">
-              <div className="flex justify-between text-sm">
-                <span className="text-white/80">Usage</span>
-                <span className="font-medium">{usagePercentage.toFixed(1)}%</span>
-              </div>
-              <div className="h-3 bg-white/20 rounded-full overflow-hidden backdrop-blur-sm">
-                <div
-                  className="h-full bg-white rounded-full transition-all duration-500 ease-out"
-                  style={{ width: `${usagePercentage}%` }}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="hidden lg:flex items-center justify-center">
-            <div className="w-24 h-24 rounded-2xl bg-white/10 backdrop-blur-sm flex items-center justify-center">
-              <Rocket className="w-12 h-12 text-white" />
-            </div>
-          </div>
+        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-indigo-600 rounded-full transition-all duration-500"
+            style={{ width: `${usagePercent}%` }}
+          />
         </div>
       </div>
 
       {/* Quick Actions */}
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold text-foreground">Quick Actions</h2>
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {quickActions.map((action, index) => (
+          {quickActions.map((action) => (
             <Link
               key={action.href}
               href={action.href}
-              className="action-card group"
-              style={{ animationDelay: `${index * 50}ms` }}
+              className="bg-white rounded-xl border border-gray-200 p-5 hover:shadow-md hover:border-gray-300 transition-all group"
             >
-              <div
-                className={`w-14 h-14 rounded-xl bg-gradient-to-br ${action.gradient} flex items-center justify-center mb-4 transition-transform duration-200 group-hover:scale-110 shadow-lg`}
-              >
-                <action.icon className="w-7 h-7 text-white" />
+              <div className={`w-12 h-12 rounded-xl ${action.bgColor} flex items-center justify-center mb-4`}>
+                <action.icon className="w-6 h-6 text-white" />
               </div>
-              <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
+              <h3 className="font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">
                 {action.title}
               </h3>
-              <p className="text-sm text-muted-foreground mt-1">{action.description}</p>
-              <ArrowRight className="w-5 h-5 text-muted-foreground mt-3 transition-all duration-200 opacity-0 group-hover:opacity-100 group-hover:translate-x-1" />
+              <p className="text-sm text-gray-500 mt-1">{action.description}</p>
             </Link>
           ))}
         </div>
       </div>
-
-      {/* Getting Started */}
-      {usage && usage.total_requests === 0 && (
-        <div className="rounded-2xl border-2 border-info/20 bg-info-muted/50 p-6 lg:p-8 animate-slide-up">
-          <div className="flex items-start gap-4">
-            <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-info/10 flex items-center justify-center">
-              <Sparkles className="w-6 h-6 text-info" />
-            </div>
-            <div className="flex-1 space-y-4">
-              <div>
-                <h3 className="text-lg font-semibold text-foreground">Getting Started</h3>
-                <p className="text-muted-foreground mt-1">
-                  Welcome to Body Measurement API! Here&apos;s how to get started:
-                </p>
-              </div>
-              <ol className="space-y-3">
-                {[
-                  'Upload your first image to test the measurement system',
-                  'Add your products with size charts',
-                  'Get your API key and integrate with your e-commerce platform',
-                  'Track analytics and ROI in real-time',
-                ].map((step, index) => (
-                  <li key={index} className="flex items-start gap-3">
-                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-info/10 flex items-center justify-center text-xs font-bold text-info">
-                      {index + 1}
-                    </div>
-                    <span className="text-foreground">{step}</span>
-                  </li>
-                ))}
-              </ol>
-              <div className="pt-2">
-                <Link
-                  href="/dashboard/upload"
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-info text-white rounded-lg font-medium hover:bg-info/90 transition-colors"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  Start First Measurement
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
