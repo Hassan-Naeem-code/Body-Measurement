@@ -2,7 +2,7 @@
 Product and Size Chart Schemas - Enhanced for Product-Specific Sizing
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Optional, List, Dict
 from uuid import UUID
 from datetime import datetime
@@ -15,30 +15,61 @@ class SizeChartBase(BaseModel):
     size_name: str = Field(..., description="Size name (XS, S, M, L, XL, etc.)")
 
     # Circumference ranges (in cm)
-    chest_min: Optional[float] = Field(None, description="Minimum chest circumference in cm")
-    chest_max: Optional[float] = Field(None, description="Maximum chest circumference in cm")
-    waist_min: Optional[float] = Field(None, description="Minimum waist circumference in cm")
-    waist_max: Optional[float] = Field(None, description="Maximum waist circumference in cm")
-    hip_min: Optional[float] = Field(None, description="Minimum hip circumference in cm")
-    hip_max: Optional[float] = Field(None, description="Maximum hip circumference in cm")
+    chest_min: Optional[float] = Field(None, ge=0, le=300, description="Minimum chest circumference in cm")
+    chest_max: Optional[float] = Field(None, ge=0, le=300, description="Maximum chest circumference in cm")
+    waist_min: Optional[float] = Field(None, ge=0, le=300, description="Minimum waist circumference in cm")
+    waist_max: Optional[float] = Field(None, ge=0, le=300, description="Maximum waist circumference in cm")
+    hip_min: Optional[float] = Field(None, ge=0, le=300, description="Minimum hip circumference in cm")
+    hip_max: Optional[float] = Field(None, ge=0, le=300, description="Maximum hip circumference in cm")
 
     # Additional measurements
-    height_min: Optional[float] = Field(None, description="Minimum height in cm")
-    height_max: Optional[float] = Field(None, description="Maximum height in cm")
-    inseam_min: Optional[float] = Field(None, description="Minimum inseam in cm")
-    inseam_max: Optional[float] = Field(None, description="Maximum inseam in cm")
-    shoulder_width_min: Optional[float] = Field(None, description="Minimum shoulder width in cm")
-    shoulder_width_max: Optional[float] = Field(None, description="Maximum shoulder width in cm")
-    arm_length_min: Optional[float] = Field(None, description="Minimum arm length in cm")
-    arm_length_max: Optional[float] = Field(None, description="Maximum arm length in cm")
+    height_min: Optional[float] = Field(None, ge=0, le=300, description="Minimum height in cm")
+    height_max: Optional[float] = Field(None, ge=0, le=300, description="Maximum height in cm")
+    inseam_min: Optional[float] = Field(None, ge=0, le=150, description="Minimum inseam in cm")
+    inseam_max: Optional[float] = Field(None, ge=0, le=150, description="Maximum inseam in cm")
+    shoulder_width_min: Optional[float] = Field(None, ge=0, le=100, description="Minimum shoulder width in cm")
+    shoulder_width_max: Optional[float] = Field(None, ge=0, le=100, description="Maximum shoulder width in cm")
+    arm_length_min: Optional[float] = Field(None, ge=0, le=120, description="Minimum arm length in cm")
+    arm_length_max: Optional[float] = Field(None, ge=0, le=120, description="Maximum arm length in cm")
 
     # Weight range (optional)
-    weight_min: Optional[float] = Field(None, description="Minimum weight in kg")
-    weight_max: Optional[float] = Field(None, description="Maximum weight in kg")
+    weight_min: Optional[float] = Field(None, ge=0, le=500, description="Minimum weight in kg")
+    weight_max: Optional[float] = Field(None, ge=0, le=500, description="Maximum weight in kg")
 
     # Fit type
     fit_type: str = Field(default="regular", description="Fit type: tight, regular, loose")
-    display_order: int = Field(default=0, description="Display order for sorting")
+    display_order: int = Field(default=0, ge=0, description="Display order for sorting")
+
+    @model_validator(mode='after')
+    def validate_min_max_ranges(self):
+        """Validate that min values are less than or equal to max values"""
+        measurement_pairs = [
+            ('chest_min', 'chest_max', 'Chest'),
+            ('waist_min', 'waist_max', 'Waist'),
+            ('hip_min', 'hip_max', 'Hip'),
+            ('height_min', 'height_max', 'Height'),
+            ('inseam_min', 'inseam_max', 'Inseam'),
+            ('shoulder_width_min', 'shoulder_width_max', 'Shoulder width'),
+            ('arm_length_min', 'arm_length_max', 'Arm length'),
+            ('weight_min', 'weight_max', 'Weight'),
+        ]
+
+        errors = []
+        for min_field, max_field, name in measurement_pairs:
+            min_val = getattr(self, min_field)
+            max_val = getattr(self, max_field)
+            if min_val is not None and max_val is not None:
+                if min_val > max_val:
+                    errors.append(f"{name} minimum ({min_val}) cannot be greater than maximum ({max_val})")
+
+        if errors:
+            raise ValueError('; '.join(errors))
+
+        # Validate fit_type
+        if self.fit_type not in ('tight', 'regular', 'loose'):
+            raise ValueError("fit_type must be 'tight', 'regular', or 'loose'")
+
+        return self
 
 
 class SizeChartCreate(SizeChartBase):

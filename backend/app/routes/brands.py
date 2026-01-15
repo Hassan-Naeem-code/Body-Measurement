@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from typing import List
 
 from app.core.database import get_db
+from app.core.auth import get_current_brand_by_api_key
 from app.models import Brand, Measurement, Product, SubscriptionTier
 from app.schemas import (
     BrandResponse,
@@ -24,39 +25,28 @@ from app.schemas import (
 router = APIRouter()
 
 
-def get_brand_by_api_key(api_key: str, db: Session) -> Brand:
-    """Dependency to get brand from API key"""
-    brand = db.query(Brand).filter(Brand.api_key == api_key).first()
-    if not brand:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key",
-        )
-    if not brand.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is inactive",
-        )
-    return brand
-
-
 @router.get("/me", response_model=BrandResponse)
 async def get_brand_profile(
-    api_key: str = Query(..., description="API key"),
-    db: Session = Depends(get_db),
+    brand: Brand = Depends(get_current_brand_by_api_key),
 ):
-    """Get brand profile information"""
-    brand = get_brand_by_api_key(api_key, db)
+    """
+    Get brand profile information
+
+    **Authentication**: Use X-API-Key header (query param deprecated)
+    """
     return BrandResponse.model_validate(brand)
 
 
 @router.get("/usage", response_model=UsageStats)
 async def get_usage_stats(
-    api_key: str = Query(..., description="API key"),
+    brand: Brand = Depends(get_current_brand_by_api_key),
     db: Session = Depends(get_db),
 ):
-    """Get API usage statistics"""
-    brand = get_brand_by_api_key(api_key, db)
+    """
+    Get API usage statistics
+
+    **Authentication**: Use X-API-Key header (query param deprecated)
+    """
 
     # Total requests
     total_requests = db.query(func.count(Measurement.id)).filter(
@@ -101,11 +91,14 @@ async def get_usage_stats(
 
 @router.get("/analytics", response_model=Analytics)
 async def get_analytics(
-    api_key: str = Query(..., description="API key"),
+    brand: Brand = Depends(get_current_brand_by_api_key),
     db: Session = Depends(get_db),
 ):
-    """Get analytics and ROI metrics"""
-    brand = get_brand_by_api_key(api_key, db)
+    """
+    Get analytics and ROI metrics
+
+    **Authentication**: Use X-API-Key header (query param deprecated)
+    """
 
     # Total measurements
     total_measurements = db.query(func.count(Measurement.id)).filter(
@@ -167,11 +160,14 @@ async def get_analytics(
 @router.post("/products", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 async def create_product(
     product_data: ProductCreate,
-    api_key: str = Query(..., description="API key"),
+    brand: Brand = Depends(get_current_brand_by_api_key),
     db: Session = Depends(get_db),
 ):
-    """Add a new product with size chart"""
-    brand = get_brand_by_api_key(api_key, db)
+    """
+    Add a new product with size chart
+
+    **Authentication**: Use X-API-Key header (query param deprecated)
+    """
 
     new_product = Product(
         brand_id=brand.id,
@@ -189,11 +185,14 @@ async def create_product(
 
 @router.get("/products", response_model=List[ProductResponse])
 async def get_products(
-    api_key: str = Query(..., description="API key"),
+    brand: Brand = Depends(get_current_brand_by_api_key),
     db: Session = Depends(get_db),
 ):
-    """Get all products for the brand"""
-    brand = get_brand_by_api_key(api_key, db)
+    """
+    Get all products for the brand
+
+    **Authentication**: Use X-API-Key header (query param deprecated)
+    """
 
     products = db.query(Product).filter(Product.brand_id == brand.id).all()
 
@@ -202,12 +201,15 @@ async def get_products(
 
 @router.get("/history", response_model=MeasurementHistoryResponse)
 async def get_measurement_history(
-    api_key: str = Query(..., description="API key"),
     days: int = Query(30, description="Number of days to look back", ge=1, le=365),
+    brand: Brand = Depends(get_current_brand_by_api_key),
     db: Session = Depends(get_db),
 ):
-    """Get measurement history with daily aggregations and trends"""
-    brand = get_brand_by_api_key(api_key, db)
+    """
+    Get measurement history with daily aggregations and trends
+
+    **Authentication**: Use X-API-Key header (query param deprecated)
+    """
 
     # Calculate date range
     end_date = datetime.utcnow()

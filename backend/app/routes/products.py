@@ -9,7 +9,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from app.core.database import get_db
-from app.core.auth import get_current_brand
+from app.core.auth import get_current_brand_by_api_key
 from app.models.brand import Brand
 from app.models.product import Product, SizeChart
 from app.schemas.product import (
@@ -22,6 +22,11 @@ from app.schemas.product import (
     SizeChartUpdate,
     SizeChartResponse,
 )
+from app.data.size_charts import (
+    PRODUCT_TEMPLATES,
+    get_size_charts_for_category,
+    get_product_template,
+)
 
 router = APIRouter()
 
@@ -32,7 +37,7 @@ router = APIRouter()
 def create_product(
     product_data: ProductCreate,
     db: Session = Depends(get_db),
-    current_brand: Brand = Depends(get_current_brand),
+    current_brand: Brand = Depends(get_current_brand_by_api_key),
 ):
     """
     Create a new product with optional size charts
@@ -142,7 +147,7 @@ def list_products(
     category: Optional[str] = Query(None, description="Filter by category"),
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     db: Session = Depends(get_db),
-    current_brand: Brand = Depends(get_current_brand),
+    current_brand: Brand = Depends(get_current_brand_by_api_key),
 ):
     """
     List all products for the authenticated brand
@@ -176,7 +181,7 @@ def list_products(
 def get_product(
     product_id: UUID,
     db: Session = Depends(get_db),
-    current_brand: Brand = Depends(get_current_brand),
+    current_brand: Brand = Depends(get_current_brand_by_api_key),
 ):
     """
     Get a specific product with its size charts
@@ -207,7 +212,7 @@ def update_product(
     product_id: UUID,
     product_data: ProductUpdate,
     db: Session = Depends(get_db),
-    current_brand: Brand = Depends(get_current_brand),
+    current_brand: Brand = Depends(get_current_brand_by_api_key),
 ):
     """
     Update a product's metadata (not size charts - use separate endpoints for those)
@@ -256,7 +261,7 @@ def update_product(
 def delete_product(
     product_id: UUID,
     db: Session = Depends(get_db),
-    current_brand: Brand = Depends(get_current_brand),
+    current_brand: Brand = Depends(get_current_brand_by_api_key),
 ):
     """
     Delete a product (and all its size charts due to CASCADE)
@@ -292,7 +297,7 @@ def add_size_chart(
     product_id: UUID,
     chart_data: SizeChartCreate,
     db: Session = Depends(get_db),
-    current_brand: Brand = Depends(get_current_brand),
+    current_brand: Brand = Depends(get_current_brand_by_api_key),
 ):
     """
     Add a size chart to a product
@@ -389,7 +394,7 @@ def add_size_chart(
 def get_size_charts(
     product_id: UUID,
     db: Session = Depends(get_db),
-    current_brand: Brand = Depends(get_current_brand),
+    current_brand: Brand = Depends(get_current_brand_by_api_key),
 ):
     """
     Get all size charts for a product
@@ -425,7 +430,7 @@ def update_size_chart(
     chart_id: UUID,
     chart_data: SizeChartUpdate,
     db: Session = Depends(get_db),
-    current_brand: Brand = Depends(get_current_brand),
+    current_brand: Brand = Depends(get_current_brand_by_api_key),
 ):
     """
     Update a size chart
@@ -488,7 +493,7 @@ def update_size_chart(
 def delete_size_chart(
     chart_id: UUID,
     db: Session = Depends(get_db),
-    current_brand: Brand = Depends(get_current_brand),
+    current_brand: Brand = Depends(get_current_brand_by_api_key),
 ):
     """
     Delete a size chart
@@ -527,7 +532,7 @@ def recommend_size(
     product_id: UUID,
     request: SizeRecommendationRequest,
     db: Session = Depends(get_db),
-    current_brand: Brand = Depends(get_current_brand),
+    current_brand: Brand = Depends(get_current_brand_by_api_key),
 ):
     """
     Get size recommendation for a product based on body measurements
@@ -639,7 +644,7 @@ def recommend_size(
 def recommend_size_bulk(
     measurements: dict,
     db: Session = Depends(get_db),
-    current_brand: Brand = Depends(get_current_brand),
+    current_brand: Brand = Depends(get_current_brand_by_api_key),
 ):
     """
     Get size recommendations for all products based on measurements
@@ -714,4 +719,241 @@ def recommend_size_bulk(
     return {
         "recommendations": recommendations,
         "total": len(recommendations)
+    }
+
+
+# ===== Product Templates Endpoints =====
+
+@router.get("/templates")
+def list_product_templates():
+    """
+    List all available product templates with pre-defined size charts
+
+    **No Authentication Required** - Public endpoint
+
+    **Returns**: List of template names with descriptions
+    """
+    templates = []
+    for key, template in PRODUCT_TEMPLATES.items():
+        templates.append({
+            "template_id": key,
+            "name": template["name"],
+            "category": template["category"],
+            "subcategory": template.get("subcategory"),
+            "gender": template.get("gender"),
+            "age_group": template.get("age_group"),
+            "size_count": len(template["size_charts"]),
+            "sizes": [s["size_name"] for s in template["size_charts"]]
+        })
+    return {"templates": templates, "total": len(templates)}
+
+
+@router.post("/products/from-template", response_model=ProductWithSizeCharts, status_code=status.HTTP_201_CREATED)
+def create_product_from_template(
+    template_id: str = Query(..., description="Template ID (e.g., 'mens_tshirt', 'womens_dress')"),
+    name: Optional[str] = Query(None, description="Custom product name (optional)"),
+    sku: Optional[str] = Query(None, description="Product SKU (optional)"),
+    description: Optional[str] = Query(None, description="Product description (optional)"),
+    db: Session = Depends(get_db),
+    current_brand: Brand = Depends(get_current_brand_by_api_key),
+):
+    """
+    Create a new product using a pre-defined template with size charts
+
+    **Authentication**: Requires valid API key in X-API-Key header
+
+    **Query Parameters**:
+    - template_id: Template to use (see GET /templates for options)
+    - name: Custom product name (optional - uses template name if not provided)
+    - sku: Product SKU (optional)
+    - description: Product description (optional)
+
+    **Available Templates**:
+    - mens_tshirt: Men's T-Shirt with XS-3XL sizes
+    - womens_blouse: Women's Blouse with XS-2XL sizes
+    - mens_jeans: Men's Jeans with waist sizes 28-40
+    - womens_pants: Women's Pants with sizes 0-14
+    - womens_dress: Women's Dress with XS-XL sizes
+    - athletic_wear: Unisex Athletic Top with XS-2XL sizes
+    - mens_jacket: Men's Jacket with S-2XL sizes
+
+    **Example**:
+    ```
+    POST /api/v1/products/from-template?template_id=mens_tshirt&name=My+Custom+Tee
+    ```
+    """
+    # Get template
+    if template_id not in PRODUCT_TEMPLATES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Template '{template_id}' not found. Available: {list(PRODUCT_TEMPLATES.keys())}"
+        )
+
+    template = PRODUCT_TEMPLATES[template_id]
+
+    # Create product
+    product = Product(
+        brand_id=current_brand.id,
+        name=name or template["name"],
+        sku=sku,
+        category=template["category"],
+        subcategory=template.get("subcategory"),
+        gender=template.get("gender"),
+        age_group=template.get("age_group"),
+        description=description,
+        is_active=True,
+    )
+
+    db.add(product)
+    db.flush()  # Get product ID
+
+    # Add all size charts from template
+    for chart_data in template["size_charts"]:
+        size_chart = SizeChart(
+            product_id=product.id,
+            size_name=chart_data["size_name"],
+            chest_min=chart_data.get("chest_min"),
+            chest_max=chart_data.get("chest_max"),
+            waist_min=chart_data.get("waist_min"),
+            waist_max=chart_data.get("waist_max"),
+            hip_min=chart_data.get("hip_min"),
+            hip_max=chart_data.get("hip_max"),
+            height_min=chart_data.get("height_min"),
+            height_max=chart_data.get("height_max"),
+            inseam_min=chart_data.get("inseam_min"),
+            inseam_max=chart_data.get("inseam_max"),
+            shoulder_width_min=chart_data.get("shoulder_width_min"),
+            shoulder_width_max=chart_data.get("shoulder_width_max"),
+            arm_length_min=chart_data.get("arm_length_min"),
+            arm_length_max=chart_data.get("arm_length_max"),
+            weight_min=chart_data.get("weight_min"),
+            weight_max=chart_data.get("weight_max"),
+            fit_type=chart_data.get("fit_type", "regular"),
+            display_order=chart_data.get("display_order", 0),
+        )
+        db.add(size_chart)
+
+    db.commit()
+    db.refresh(product)
+
+    return product
+
+
+@router.post("/products/{product_id}/apply-template", response_model=ProductWithSizeCharts)
+def apply_template_to_product(
+    product_id: UUID,
+    template_id: str = Query(..., description="Template ID to apply size charts from"),
+    replace_existing: bool = Query(False, description="If true, removes existing size charts first"),
+    db: Session = Depends(get_db),
+    current_brand: Brand = Depends(get_current_brand_by_api_key),
+):
+    """
+    Apply size charts from a template to an existing product
+
+    **Authentication**: Requires valid API key in X-API-Key header
+
+    **Path Parameters**:
+    - product_id: UUID of the product
+
+    **Query Parameters**:
+    - template_id: Template to apply (see GET /templates for options)
+    - replace_existing: If true, removes all existing size charts first (default: false)
+
+    **Note**: If replace_existing is false and a size already exists, it will be skipped.
+    """
+    # Verify product exists and belongs to brand
+    product = db.query(Product).filter(
+        and_(
+            Product.id == product_id,
+            Product.brand_id == current_brand.id
+        )
+    ).first()
+
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Product {product_id} not found"
+        )
+
+    # Get template
+    if template_id not in PRODUCT_TEMPLATES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Template '{template_id}' not found. Available: {list(PRODUCT_TEMPLATES.keys())}"
+        )
+
+    template = PRODUCT_TEMPLATES[template_id]
+
+    # Remove existing size charts if requested
+    if replace_existing:
+        db.query(SizeChart).filter(SizeChart.product_id == product_id).delete()
+
+    # Get existing size names to avoid duplicates
+    existing_sizes = {s.size_name for s in db.query(SizeChart).filter(
+        SizeChart.product_id == product_id
+    ).all()}
+
+    added_count = 0
+    skipped_count = 0
+
+    # Add size charts from template
+    for chart_data in template["size_charts"]:
+        if chart_data["size_name"] in existing_sizes:
+            skipped_count += 1
+            continue
+
+        size_chart = SizeChart(
+            product_id=product_id,
+            size_name=chart_data["size_name"],
+            chest_min=chart_data.get("chest_min"),
+            chest_max=chart_data.get("chest_max"),
+            waist_min=chart_data.get("waist_min"),
+            waist_max=chart_data.get("waist_max"),
+            hip_min=chart_data.get("hip_min"),
+            hip_max=chart_data.get("hip_max"),
+            height_min=chart_data.get("height_min"),
+            height_max=chart_data.get("height_max"),
+            inseam_min=chart_data.get("inseam_min"),
+            inseam_max=chart_data.get("inseam_max"),
+            shoulder_width_min=chart_data.get("shoulder_width_min"),
+            shoulder_width_max=chart_data.get("shoulder_width_max"),
+            arm_length_min=chart_data.get("arm_length_min"),
+            arm_length_max=chart_data.get("arm_length_max"),
+            weight_min=chart_data.get("weight_min"),
+            weight_max=chart_data.get("weight_max"),
+            fit_type=chart_data.get("fit_type", "regular"),
+            display_order=chart_data.get("display_order", 0),
+        )
+        db.add(size_chart)
+        added_count += 1
+
+    db.commit()
+    db.refresh(product)
+
+    return product
+
+
+@router.get("/size-chart-suggestions")
+def get_size_chart_suggestions(
+    category: str = Query(..., description="Product category (tops, bottoms, dresses, outerwear)"),
+    gender: Optional[str] = Query(None, description="Gender (male, female, unisex)"),
+):
+    """
+    Get suggested size charts for a category and gender
+
+    **No Authentication Required** - Public endpoint
+
+    **Query Parameters**:
+    - category: Product category (tops, bottoms, dresses, outerwear)
+    - gender: Target gender (male, female, unisex) - optional
+
+    **Returns**: List of suggested size charts based on industry standards
+    """
+    size_charts = get_size_charts_for_category(category, gender)
+
+    return {
+        "category": category,
+        "gender": gender,
+        "size_charts": size_charts,
+        "total": len(size_charts)
     }

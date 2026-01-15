@@ -6,16 +6,29 @@ import asyncio
 import logging
 import os
 
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.routes import auth, measurements, brands, products, webhooks, batch
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG if settings.DEBUG else logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Rate limiter setup - uses client IP address for tracking
+# In production, consider using Redis backend for distributed rate limiting
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=[f"{settings.RATE_LIMIT_PER_MINUTE}/minute"],
+    storage_uri=settings.REDIS_URL if settings.ENVIRONMENT == "production" else "memory://",
+)
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -59,6 +72,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Add rate limiter to app state and exception handler
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 
 # Custom middleware to handle client disconnection gracefully
 @app.middleware("http")
@@ -88,6 +105,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add rate limiting middleware
+app.add_middleware(SlowAPIMiddleware)
 
 # Include routers
 app.include_router(
@@ -142,6 +162,42 @@ async def root():
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
+
+
+@app.get("/stats")
+async def get_system_stats():
+    """
+    Get system statistics including cache and model performance.
+
+    Returns:
+    - cache_stats: Hit/miss rates for measurement and recommendation caches
+    - model_status: Which ML models are loaded
+    - rate_limit_info: Current rate limit configuration
+    """
+    try:
+        from app.core.cache import get_all_cache_stats
+        cache_stats = get_all_cache_stats()
+    except Exception:
+        cache_stats = {"error": "Cache module not available"}
+
+    try:
+        from app.ml.model_manager import get_model_stats
+        model_stats = get_model_stats()
+    except Exception:
+        model_stats = {"error": "Model manager not available"}
+
+    return {
+        "status": "healthy",
+        "version": settings.VERSION,
+        "environment": settings.ENVIRONMENT,
+        "cache_stats": cache_stats,
+        "model_stats": model_stats,
+        "rate_limit": {
+            "requests_per_minute": settings.RATE_LIMIT_PER_MINUTE,
+            "burst_limit": settings.RATE_LIMIT_BURST,
+        },
+        "debug_mode": settings.DEBUG,
+    }
 
 
 if __name__ == "__main__":

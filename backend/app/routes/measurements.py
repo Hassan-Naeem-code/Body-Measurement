@@ -11,6 +11,7 @@ import logging
 
 from app.core.database import get_db
 from app.core.config import settings
+from app.core.auth import get_current_brand_by_api_key
 from app.models import Brand, Measurement
 from app.schemas import MeasurementResponse, MultiPersonMeasurementResponse, PersonMeasurementResponse, PoseLandmarks as PoseLandmarksSchema, PoseLandmark as PoseLandmarkSchema, BoundingBox as BoundingBoxSchema
 from app.ml import PoseDetector, MeasurementExtractor, SizeRecommender, MultiPersonProcessor, EnhancedMultiPersonProcessor
@@ -176,47 +177,36 @@ async def run_ml_task_with_timeout(func, *args, timeout=REQUEST_TIMEOUT_SECONDS,
         raise
 
 
-def get_brand_by_api_key(api_key: str, db: Session) -> Brand:
-    """Dependency to get brand from API key"""
-    brand = db.query(Brand).filter(Brand.api_key == api_key).first()
-    if not brand:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key",
-        )
-    if not brand.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is inactive",
-        )
-    return brand
-
-
 @router.post("/process", response_model=MeasurementResponse)
 async def process_measurement(
     file: UploadFile = File(...),
-    api_key: str = Query(..., description="API key for authentication"),
     product_id: str = Query(None, description="Optional product ID for product-specific sizing"),
     fit_preference: str = Query("regular", description="Fit preference: tight, regular, or loose"),
+    height_cm: float = Query(None, description="User's height in cm for camera calibration (140-210cm). Improves accuracy by 5-10%"),
+    brand: Brand = Depends(get_current_brand_by_api_key),
     db: Session = Depends(get_db),
 ):
     """
     Process a body image and extract measurements
 
     - **file**: Full-body image (JPG, PNG, WEBP)
-    - **api_key**: Your API key for authentication
+    - **X-API-Key header**: Your API key for authentication (preferred)
     - **product_id**: (Optional) Product UUID for product-specific size recommendation
     - **fit_preference**: (Optional) Fit preference - tight, regular, or loose (default: regular)
+    - **height_cm**: (Optional) User's actual height in cm (140-210) for camera calibration
 
     Returns body measurements and size recommendation
 
+    **CAMERA CALIBRATION**: Providing the user's height via height_cm parameter
+    significantly improves measurement accuracy by 5-10%. When height is known,
+    the system can precisely calculate the pixels-per-cm ratio.
+
     **NEW**: Now supports product-specific sizing! Pass a product_id to get size recommendations
     based on that product's specific size chart instead of generic demographic charts.
+
+    **Security Note**: Use X-API-Key header for authentication instead of query parameter.
     """
     start_time = time.time()
-
-    # Validate brand
-    brand = get_brand_by_api_key(api_key, db)
 
     # Validate fit preference
     if fit_preference not in ["tight", "regular", "loose"]:
@@ -350,8 +340,9 @@ async def process_measurement(
 async def process_multi_person_measurement(
     request: Request,
     file: UploadFile = File(...),
-    api_key: str = Query(..., description="API key for authentication"),
     use_ml_ratios: bool = Query(True, description="Use ML-based depth ratio prediction (recommended for better accuracy)"),
+    height_cm: float = Query(None, description="Height in cm for camera calibration (140-210cm). Only applies when single person detected."),
+    brand: Brand = Depends(get_current_brand_by_api_key),
     db: Session = Depends(get_db),
 ):
     """
@@ -360,8 +351,9 @@ async def process_multi_person_measurement(
     **NEW ENDPOINT**: Supports multiple people in the same image.
 
     - **file**: Full-body image with one or more people (JPG, PNG, WEBP)
-    - **api_key**: Your API key for authentication
+    - **X-API-Key header**: Your API key for authentication (preferred)
     - **use_ml_ratios**: (Optional) Use ML depth ratio prediction for better accuracy (default: True)
+    - **height_cm**: (Optional) Height in cm for calibration (only used for single-person images)
 
     **ML Enhancement (NEW):**
     - Set use_ml_ratios=true for personalized depth ratios based on body type (recommended)
@@ -378,11 +370,10 @@ async def process_multi_person_measurement(
     - WHOLE human being must be visible from head to toes
     - Minimum confidence thresholds per body part
     - Human anatomy validation (not animals/objects)
+
+    **Security Note**: Use X-API-Key header for authentication instead of query parameter.
     """
     start_time = time.time()
-
-    # Validate brand
-    brand = get_brand_by_api_key(api_key, db)
 
     # Validate file type
     if file.content_type not in ["image/jpeg", "image/png", "image/webp"]:

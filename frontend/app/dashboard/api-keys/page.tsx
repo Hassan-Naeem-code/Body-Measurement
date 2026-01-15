@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react';
 import { authHelpers } from '@/lib/auth';
 import type { Brand } from '@/lib/types';
-import { Key, Copy, Check, Shield, Code, User, ExternalLink, Terminal } from 'lucide-react';
+import { Key, Copy, Check, Shield, Code, User, ExternalLink, Terminal, Eye, EyeOff } from 'lucide-react';
 
 export default function ApiKeysPage() {
   const [brand, setBrand] = useState<Brand | null>(null);
   const [copied, setCopied] = useState(false);
   const [copiedExample, setCopiedExample] = useState<string | null>(null);
+  const [showKey, setShowKey] = useState(false);
 
   useEffect(() => {
     const brandData = authHelpers.getBrand();
@@ -24,9 +25,16 @@ export default function ApiKeysPage() {
   };
 
   const copyExample = (code: string, name: string) => {
-    navigator.clipboard.writeText(code);
+    // Replace the placeholder with actual key when copying
+    const actualCode = code.replace('YOUR_API_KEY', brand?.api_key || 'YOUR_API_KEY');
+    navigator.clipboard.writeText(actualCode);
     setCopiedExample(name);
     setTimeout(() => setCopiedExample(null), 2000);
+  };
+
+  const maskApiKey = (key: string) => {
+    if (key.length <= 8) return key;
+    return key.substring(0, 4) + '••••••••••••••••' + key.substring(key.length - 4);
   };
 
   if (!brand) {
@@ -37,21 +45,28 @@ export default function ApiKeysPage() {
     );
   }
 
+  // Use placeholder in examples for security - actual key is inserted when copying
   const examples = [
     {
       name: 'Process Image',
       description: 'Upload and process a body image',
-      code: `curl -X POST "http://localhost:8000/api/v1/measurements/process?api_key=${brand.api_key}" -F "file=@image.jpg"`,
+      code: `curl -X POST "http://localhost:8000/api/v1/measurements/process" \\
+  -H "X-API-Key: YOUR_API_KEY" \\
+  -F "file=@image.jpg"`,
     },
     {
       name: 'Get Profile',
       description: 'Retrieve your account information',
-      code: `curl "http://localhost:8000/api/v1/brands/me?api_key=${brand.api_key}"`,
+      code: `curl "http://localhost:8000/api/v1/brands/me" \\
+  -H "X-API-Key: YOUR_API_KEY"`,
     },
     {
       name: 'Add Product',
       description: 'Create a new product with size chart',
-      code: `curl -X POST "http://localhost:8000/api/v1/brands/products?api_key=${brand.api_key}" -H "Content-Type: application/json" -d '{"name": "T-Shirt", "category": "Tops", "size_chart": {"S": {"chest": 90}, "M": {"chest": 95}}}'`,
+      code: `curl -X POST "http://localhost:8000/api/v1/brands/products" \\
+  -H "X-API-Key: YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name": "T-Shirt", "category": "tops"}'`,
     },
   ];
 
@@ -79,8 +94,15 @@ export default function ApiKeysPage() {
         <div className="p-5">
           <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
             <code className="flex-1 text-sm font-mono text-gray-800 break-all">
-              {brand.api_key}
+              {showKey ? brand.api_key : maskApiKey(brand.api_key)}
             </code>
+            <button
+              onClick={() => setShowKey(!showKey)}
+              className="p-2 rounded-lg text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              title={showKey ? 'Hide API key' : 'Show API key'}
+            >
+              {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
             <button
               onClick={handleCopy}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
@@ -95,9 +117,15 @@ export default function ApiKeysPage() {
           </div>
           <div className="mt-4 flex items-start gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
             <Shield className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-amber-800">
-              <strong>Security:</strong> Keep your API key secret. Never share it publicly or commit to version control.
-            </p>
+            <div className="text-sm text-amber-800">
+              <p><strong>Security Best Practices:</strong></p>
+              <ul className="mt-1 list-disc list-inside space-y-1">
+                <li>Keep your API key secret - never share it publicly</li>
+                <li>Use the X-API-Key header instead of query parameters</li>
+                <li>Never commit API keys to version control</li>
+                <li>Rotate keys periodically for enhanced security</li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>
