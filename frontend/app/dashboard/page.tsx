@@ -14,6 +14,11 @@ import {
   ShoppingBag,
   LineChart,
   ArrowRight,
+  Code2,
+  Smartphone,
+  ExternalLink,
+  Copy,
+  CheckCircle2,
 } from 'lucide-react';
 
 const formatNumber = (num: number): string => {
@@ -226,6 +231,69 @@ export default function DashboardPage() {
               <p className="text-sm text-gray-500 mt-1">{action.description}</p>
             </Link>
           ))}
+        </div>
+      </div>
+
+      {/* SDK Integration Section */}
+      <div className="bg-gradient-to-br from-indigo-50 via-white to-purple-50 rounded-2xl border border-indigo-100 p-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div className="flex items-start gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center flex-shrink-0">
+              <Code2 className="w-7 h-7 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Multi-Platform SDK Support</h2>
+              <p className="text-gray-600 mt-1">
+                Integrate body measurements into your apps with our production-ready SDKs
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/sdk"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700 transition-colors whitespace-nowrap"
+          >
+            <Smartphone className="w-4 h-4" />
+            View SDK Docs
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+
+        {/* SDK Platform Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-6">
+          {[
+            { name: 'React Native', status: 'Production', icon: '⚛️', color: 'bg-blue-500' },
+            { name: 'Flutter', status: 'Production', icon: '🐦', color: 'bg-cyan-500' },
+            { name: 'iOS Swift', status: 'Production', icon: '🍎', color: 'bg-gray-800' },
+            { name: 'Android', status: 'Production', icon: '🤖', color: 'bg-green-500' },
+            { name: 'Web SDK', status: 'Production', icon: '🌐', color: 'bg-indigo-500' },
+            { name: 'REST API', status: 'Production', icon: '🔌', color: 'bg-purple-500' },
+          ].map((sdk) => (
+            <div
+              key={sdk.name}
+              className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md hover:border-indigo-200 transition-all"
+            >
+              <div className="text-2xl mb-2">{sdk.icon}</div>
+              <h3 className="font-semibold text-gray-900 text-sm">{sdk.name}</h3>
+              <span className="inline-flex items-center gap-1 mt-1 text-xs text-green-600 font-medium">
+                <CheckCircle2 className="w-3 h-3" />
+                {sdk.status}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Quick Install Snippet */}
+        <div className="mt-6 bg-gray-900 rounded-xl p-4 overflow-x-auto">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-gray-400 font-medium">Quick Install</span>
+            <div className="flex gap-2">
+              <span className="px-2 py-0.5 text-xs bg-blue-500/20 text-blue-400 rounded">npm</span>
+              <span className="px-2 py-0.5 text-xs bg-cyan-500/20 text-cyan-400 rounded">pub</span>
+            </div>
+          </div>
+          <code className="text-sm text-green-400 font-mono">
+            npm install @body-measurement/react-native-sdk
+          </code>
         </div>
       </div>
     </div>

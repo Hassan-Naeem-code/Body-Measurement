@@ -10,6 +10,8 @@ from app.ml.multi_person_processor_v2 import EnhancedMultiPersonProcessor
 from app.ml.circumference_extractor_simple import SimpleCircumferenceExtractor, CircumferenceMeasurements
 from app.ml.multi_person_processor_v3 import DepthBasedMultiPersonProcessor
 from app.ml.demographic_detector import DemographicDetector, DemographicInfo
+from app.ml.depth_enhanced_extractor import DepthEnhancedCircumferenceExtractor, DepthMeasurementData
+from app.ml.depth_estimator import DepthEstimator
 
 __all__ = [
     "PoseDetector",
@@ -33,4 +35,7 @@ __all__ = [
     "CircumferenceMeasurements",
     "DemographicDetector",
     "DemographicInfo",
+    "DepthEnhancedCircumferenceExtractor",
+    "DepthMeasurementData",
+    "DepthEstimator",
 ]

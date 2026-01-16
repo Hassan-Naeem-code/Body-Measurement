@@ -570,17 +570,34 @@ async def process_multi_person_measurement(
                 # Prepare ML metadata
                 first_measurement = result.measurements[0]
                 ml_metadata = None
-                if use_ml_ratios and hasattr(first_measurement.body_measurements, 'predicted_ratios'):
+                body_meas = first_measurement.body_measurements
+
+                # Check for depth_data (from MiDaS depth-enhanced extractor)
+                if body_meas and hasattr(body_meas, 'depth_data') and body_meas.depth_data is not None:
                     ml_metadata = {
                         "used": True,
-                        "method": first_measurement.body_measurements.predicted_ratios.method,
-                        "confidence": first_measurement.body_measurements.predicted_ratios.confidence,
-                        "body_shape": first_measurement.body_measurements.body_shape_category,
-                        "bmi_estimate": first_measurement.body_measurements.bmi_estimate,
+                        "method": body_meas.depth_data.method,
+                        "confidence": body_meas.depth_data.depth_confidence,
+                        "body_shape": getattr(body_meas, 'body_shape_category', 'unknown'),
+                        "bmi_estimate": getattr(body_meas, 'bmi_estimate', 22.0),
                         "ratios": {
-                            "chest": first_measurement.body_measurements.predicted_ratios.chest_ratio,
-                            "waist": first_measurement.body_measurements.predicted_ratios.waist_ratio,
-                            "hip": first_measurement.body_measurements.predicted_ratios.hip_ratio,
+                            "chest": body_meas.depth_data.chest_depth_ratio,
+                            "waist": body_meas.depth_data.waist_depth_ratio,
+                            "hip": body_meas.depth_data.hip_depth_ratio,
+                        }
+                    }
+                # Fallback: check for predicted_ratios (from older ML extractor)
+                elif body_meas and hasattr(body_meas, 'predicted_ratios') and body_meas.predicted_ratios is not None:
+                    ml_metadata = {
+                        "used": True,
+                        "method": body_meas.predicted_ratios.method,
+                        "confidence": body_meas.predicted_ratios.confidence,
+                        "body_shape": getattr(body_meas, 'body_shape_category', 'unknown'),
+                        "bmi_estimate": getattr(body_meas, 'bmi_estimate', 22.0),
+                        "ratios": {
+                            "chest": body_meas.predicted_ratios.chest_ratio,
+                            "waist": body_meas.predicted_ratios.waist_ratio,
+                            "hip": body_meas.predicted_ratios.hip_ratio,
                         }
                     }
                 elif not use_ml_ratios:
@@ -701,3 +718,127 @@ def process_image_sync(image_content: bytes, api_key: str, use_ml_ratios: bool =
         "processing_time_ms": processing_time_ms,
     }
 
+
+# ============================================================================
+# VALIDATION ENDPOINT - Test accuracy against ground truth
+# ============================================================================
+
+@router.post("/validate")
+async def run_validation(
+    request: Request,
+    use_midas_depth: bool = Query(True, description="Use MiDaS depth estimation"),
+    max_samples: int = Query(None, description="Maximum samples to validate"),
+    filter_gender: str = Query(None, description="Filter by gender (male/female)"),
+    filter_body_type: str = Query(None, description="Filter by body type"),
+    brand: Brand = Depends(get_current_brand_by_api_key),
+):
+    """
+    Run validation against ground truth dataset.
+
+    This endpoint compares ML predictions against real tape measurements
+    to calculate actual accuracy metrics (MAE, MAPE, RMSE, etc.).
+
+    To add ground truth data:
+    1. Add images to: backend/app/data/validation/images/
+    2. Edit: backend/app/data/validation/ground_truth.json
+
+    Returns comprehensive accuracy report.
+    """
+    try:
+        from app.ml.validation import ValidationRunner
+
+        runner = ValidationRunner(use_midas_depth=use_midas_depth)
+
+        # Run validation in thread pool
+        def run_validation_sync():
+            return runner.run_validation(
+                filter_gender=filter_gender,
+                filter_body_type=filter_body_type,
+                max_samples=max_samples,
+            )
+
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(_ml_thread_pool, run_validation_sync)
+
+        # Generate report
+        report = runner.metrics_calculator.generate_report(result.metrics)
+
+        return {
+            "success": True,
+            "summary": {
+                "total_samples": result.total_samples,
+                "successful_samples": result.successful_samples,
+                "failed_samples": result.failed_samples,
+                "accuracy_grade": result.accuracy_grade,
+                "extractor_type": result.extractor_type,
+            },
+            "metrics": {
+                "mae_cm": round(result.metrics.mae, 2),
+                "mape_percent": round(result.metrics.mape, 2),
+                "rmse_cm": round(result.metrics.rmse, 2),
+                "correlation": round(result.metrics.correlation, 3),
+                "within_1cm_percent": result.metrics.within_tolerance.get('within_1cm', 0),
+                "within_2cm_percent": result.metrics.within_tolerance.get('within_2cm', 0),
+                "within_3cm_percent": result.metrics.within_tolerance.get('within_3cm', 0),
+            },
+            "per_measurement": {
+                name: {
+                    "mae_cm": round(m.mae, 2),
+                    "mape_percent": round(m.mape, 2),
+                    "sample_count": m.sample_count,
+                }
+                for name, m in result.metrics.per_measurement.items()
+            },
+            "report": report,
+        }
+
+    except Exception as e:
+        logger.error(f"Validation error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Validation failed: {str(e)}",
+        )
+
+
+@router.get("/validation/dataset")
+async def get_validation_dataset(
+    brand: Brand = Depends(get_current_brand_by_api_key),
+):
+    """
+    Get validation dataset statistics and sample entries.
+
+    Shows how many ground truth samples are available and their distribution.
+    """
+    try:
+        from app.ml.validation import ValidationDataset
+
+        dataset = ValidationDataset()
+        stats = dataset.get_statistics()
+        samples = dataset.get_all()[:5]  # First 5 samples
+
+        return {
+            "statistics": stats,
+            "sample_entries": [
+                {
+                    "id": s.id,
+                    "image_path": s.image_path,
+                    "gender": s.gender,
+                    "body_type": s.body_type,
+                    "has_chest": s.actual_chest_circumference is not None,
+                    "has_waist": s.actual_waist_circumference is not None,
+                    "has_hip": s.actual_hip_circumference is not None,
+                }
+                for s in samples
+            ],
+            "instructions": {
+                "add_data": "Edit backend/app/data/validation/ground_truth.json",
+                "add_images": "Add images to backend/app/data/validation/images/",
+            },
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting validation dataset: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e),
+        )

@@ -1,0 +1,84 @@
+{
+  "version": "1.0",
+  "updated_at": "2026-01-15T00:00:00",
+  "total_samples": 3,
+  "description": "Sample ground truth data for validation. Add real measurements from tape measure to validate ML accuracy.",
+  "instructions": {
+    "how_to_add_data": [
+      "1. Take a photo of person in front-facing pose",
+      "2. Save image to app/data/validation/images/ folder",
+      "3. Take actual tape measurements of the person",
+      "4. Add entry below with image_path and actual measurements",
+      "5. Run validation to see accuracy metrics"
+    ],
+    "measurement_units": "All measurements in centimeters (cm)",
+    "tips": [
+      "Ensure full body is visible in image (head to toes)",
+      "Person should be standing straight, facing camera",
+      "Good lighting helps pose detection",
+      "Take tape measurements at standard positions (e.g., chest at fullest point)"
+    ]
+  },
+  "measurements": [
+    {
+      "id": "gt_0001",
+      "image_path": "sample_001.jpg",
+      "actual_chest_circumference": 95.0,
+      "actual_waist_circumference": 82.0,
+      "actual_hip_circumference": 98.0,
+      "actual_shoulder_width": 45.0,
+      "actual_inseam": 80.0,
+      "actual_arm_length": 60.0,
+      "actual_height": 175.0,
+      "gender": "male",
+      "age_group": "adult",
+      "body_type": "average",
+      "pose_type": "front",
+      "image_quality": "good",
+      "measured_by": "Sample Data",
+      "measurement_date": "2026-01-15",
+      "notes": "Sample entry - replace with real data",
+      "created_at": "2026-01-15T00:00:00"
+    },
+    {
+      "id": "gt_0002",
+      "image_path": "sample_002.jpg",
+      "actual_chest_circumference": 88.0,
+      "actual_waist_circumference": 70.0,
+      "actual_hip_circumference": 95.0,
+      "actual_shoulder_width": 40.0,
+      "actual_inseam": 78.0,
+      "actual_arm_length": 56.0,
+      "actual_height": 165.0,
+      "gender": "female",
+      "age_group": "adult",
+      "body_type": "average",
+      "pose_type": "front",
+      "image_quality": "good",
+      "measured_by": "Sample Data",
+      "measurement_date": "2026-01-15",
+      "notes": "Sample entry - replace with real data",
+      "created_at": "2026-01-15T00:00:00"
+    },
+    {
+      "id": "gt_0003",
+      "image_path": "sample_003.jpg",
+      "actual_chest_circumference": 105.0,
+      "actual_waist_circumference": 95.0,
+      "actual_hip_circumference": 108.0,
+      "actual_shoulder_width": 48.0,
+      "actual_inseam": 82.0,
+      "actual_arm_length": 62.0,
+      "actual_height": 180.0,
+      "gender": "male",
+      "age_group": "adult",
+      "body_type": "plus",
+      "pose_type": "front",
+      "image_quality": "good",
+      "measured_by": "Sample Data",
+      "measurement_date": "2026-01-15",
+      "notes": "Sample entry for plus size body type",
+      "created_at": "2026-01-15T00:00:00"
+    }
+  ]
+}

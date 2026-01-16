@@ -1,336 +1,365 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FitWhisperer Widget Demo</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FitWhisperer Widget Demo</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #f9fafb;
-      min-height: 100vh;
-    }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          sans-serif;
+        background: #f9fafb;
+        min-height: 100vh;
+      }
 
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 40px 20px;
-    }
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 40px 20px;
+      }
 
-    header {
-      text-align: center;
-      margin-bottom: 60px;
-    }
+      header {
+        text-align: center;
+        margin-bottom: 60px;
+      }
 
-    header h1 {
-      font-size: 2.5rem;
-      color: #111827;
-      margin-bottom: 12px;
-    }
+      header h1 {
+        font-size: 2.5rem;
+        color: #111827;
+        margin-bottom: 12px;
+      }
 
-    header p {
-      font-size: 1.125rem;
-      color: #6b7280;
-    }
+      header p {
+        font-size: 1.125rem;
+        color: #6b7280;
+      }
 
-    .product-card {
-      background: white;
-      border-radius: 16px;
-      overflow: hidden;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-      max-width: 500px;
-      margin: 0 auto 40px;
-    }
+      .product-card {
+        background: white;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        max-width: 500px;
+        margin: 0 auto 40px;
+      }
 
-    .product-image {
-      width: 100%;
-      height: 400px;
-      object-fit: cover;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 1.5rem;
-    }
+      .product-image {
+        width: 100%;
+        height: 400px;
+        object-fit: cover;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.5rem;
+      }
 
-    .product-info {
-      padding: 24px;
-    }
+      .product-info {
+        padding: 24px;
+      }
 
-    .product-info h2 {
-      font-size: 1.5rem;
-      color: #111827;
-      margin-bottom: 8px;
-    }
+      .product-info h2 {
+        font-size: 1.5rem;
+        color: #111827;
+        margin-bottom: 8px;
+      }
 
-    .product-price {
-      font-size: 1.25rem;
-      color: #6366f1;
-      font-weight: 600;
-      margin-bottom: 16px;
-    }
+      .product-price {
+        font-size: 1.25rem;
+        color: #6366f1;
+        font-weight: 600;
+        margin-bottom: 16px;
+      }
 
-    .product-description {
-      color: #6b7280;
-      line-height: 1.6;
-      margin-bottom: 24px;
-    }
+      .product-description {
+        color: #6b7280;
+        line-height: 1.6;
+        margin-bottom: 24px;
+      }
 
-    .size-selector {
-      margin-bottom: 16px;
-    }
+      .size-selector {
+        margin-bottom: 16px;
+      }
 
-    .size-selector label {
-      display: block;
-      font-weight: 500;
-      margin-bottom: 8px;
-      color: #374151;
-    }
+      .size-selector label {
+        display: block;
+        font-weight: 500;
+        margin-bottom: 8px;
+        color: #374151;
+      }
 
-    .size-options {
-      display: flex;
-      gap: 8px;
-    }
+      .size-options {
+        display: flex;
+        gap: 8px;
+      }
 
-    .size-option {
-      width: 48px;
-      height: 48px;
-      border: 2px solid #e5e7eb;
-      border-radius: 8px;
-      background: white;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
+      .size-option {
+        width: 48px;
+        height: 48px;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        background: white;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
 
-    .size-option:hover {
-      border-color: #6366f1;
-    }
+      .size-option:hover {
+        border-color: #6366f1;
+      }
 
-    .size-option.selected {
-      border-color: #6366f1;
-      background: #6366f1;
-      color: white;
-    }
+      .size-option.selected {
+        border-color: #6366f1;
+        background: #6366f1;
+        color: white;
+      }
 
-    .size-option.recommended {
-      position: relative;
-    }
+      .size-option.recommended {
+        position: relative;
+      }
 
-    .size-option.recommended::after {
-      content: 'AI';
-      position: absolute;
-      top: -8px;
-      right: -8px;
-      background: #10b981;
-      color: white;
-      font-size: 10px;
-      padding: 2px 4px;
-      border-radius: 4px;
-      font-weight: 600;
-    }
+      .size-option.recommended::after {
+        content: "AI";
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        background: #10b981;
+        color: white;
+        font-size: 10px;
+        padding: 2px 4px;
+        border-radius: 4px;
+        font-weight: 600;
+      }
 
-    .add-to-cart {
-      width: 100%;
-      padding: 16px;
-      background: #111827;
-      color: white;
-      border: none;
-      border-radius: 10px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
+      .add-to-cart {
+        width: 100%;
+        padding: 16px;
+        background: #111827;
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
 
-    .add-to-cart:hover {
-      background: #1f2937;
-    }
+      .add-to-cart:hover {
+        background: #1f2937;
+      }
 
-    .demo-info {
-      background: white;
-      border-radius: 16px;
-      padding: 32px;
-      max-width: 600px;
-      margin: 0 auto;
-    }
+      .demo-info {
+        background: white;
+        border-radius: 16px;
+        padding: 32px;
+        max-width: 600px;
+        margin: 0 auto;
+      }
 
-    .demo-info h3 {
-      font-size: 1.25rem;
-      color: #111827;
-      margin-bottom: 16px;
-    }
+      .demo-info h3 {
+        font-size: 1.25rem;
+        color: #111827;
+        margin-bottom: 16px;
+      }
 
-    .demo-info pre {
-      background: #f3f4f6;
-      padding: 16px;
-      border-radius: 8px;
-      overflow-x: auto;
-      font-size: 14px;
-    }
+      .demo-info pre {
+        background: #f3f4f6;
+        padding: 16px;
+        border-radius: 8px;
+        overflow-x: auto;
+        font-size: 14px;
+      }
 
-    .demo-info code {
-      color: #6366f1;
-    }
+      .demo-info code {
+        color: #6366f1;
+      }
 
-    .events-log {
-      margin-top: 24px;
-      padding: 16px;
-      background: #f3f4f6;
-      border-radius: 8px;
-      max-height: 200px;
-      overflow-y: auto;
-    }
+      .events-log {
+        margin-top: 24px;
+        padding: 16px;
+        background: #f3f4f6;
+        border-radius: 8px;
+        max-height: 200px;
+        overflow-y: auto;
+      }
 
-    .events-log h4 {
-      margin-bottom: 12px;
-      color: #374151;
-    }
+      .events-log h4 {
+        margin-bottom: 12px;
+        color: #374151;
+      }
 
-    .event-item {
-      font-size: 13px;
-      font-family: monospace;
-      padding: 8px;
-      background: white;
-      border-radius: 4px;
-      margin-bottom: 8px;
-    }
+      .event-item {
+        font-size: 13px;
+        font-family: monospace;
+        padding: 8px;
+        background: white;
+        border-radius: 4px;
+        margin-bottom: 8px;
+      }
 
-    .event-item.success {
-      border-left: 3px solid #10b981;
-    }
+      .event-item.success {
+        border-left: 3px solid #10b981;
+      }
 
-    .event-item.info {
-      border-left: 3px solid #6366f1;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <header>
-      <h1>FitWhisperer Widget Demo</h1>
-      <p>Click the "Find My Size" button in the bottom-right corner to try it out</p>
-    </header>
-
-    <div class="product-card">
-      <div class="product-image">
-        Sample Product Image
-      </div>
-      <div class="product-info">
-        <h2>Classic Fit T-Shirt</h2>
-        <div class="product-price">$49.99</div>
-        <p class="product-description">
-          Premium cotton t-shirt with a classic fit. Perfect for everyday wear.
-          Machine washable and designed for comfort.
+      .event-item.info {
+        border-left: 3px solid #6366f1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>FitWhisperer Widget Demo</h1>
+        <p>
+          Click the "Find My Size" button in the bottom-right corner to try it
+          out
         </p>
+      </header>
 
-        <div class="size-selector">
-          <label>Select Size:</label>
-          <div class="size-options" id="sizeOptions">
-            <button class="size-option" data-size="XS">XS</button>
-            <button class="size-option" data-size="S">S</button>
-            <button class="size-option selected" data-size="M">M</button>
-            <button class="size-option" data-size="L">L</button>
-            <button class="size-option" data-size="XL">XL</button>
+      <div class="product-card">
+        <div class="product-image">Sample Product Image</div>
+        <div class="product-info">
+          <h2>Classic Fit T-Shirt</h2>
+          <div class="product-price">$49.99</div>
+          <p class="product-description">
+            Premium cotton t-shirt with a classic fit. Perfect for everyday
+            wear. Machine washable and designed for comfort.
+          </p>
+
+          <div class="size-selector">
+            <label>Select Size:</label>
+            <div class="size-options" id="sizeOptions">
+              <button class="size-option" data-size="XS">XS</button>
+              <button class="size-option" data-size="S">S</button>
+              <button class="size-option selected" data-size="M">M</button>
+              <button class="size-option" data-size="L">L</button>
+              <button class="size-option" data-size="XL">XL</button>
+            </div>
           </div>
+
+          <button class="add-to-cart">Add to Cart</button>
         </div>
-
-        <button class="add-to-cart">Add to Cart</button>
       </div>
-    </div>
 
-    <div class="demo-info">
-      <h3>Integration Code</h3>
-      <pre><code>&lt;script
+      <div class="demo-info">
+        <h3>Integration Code</h3>
+        <pre><code>&lt;script
   src="body-measurement-widget.js"
   data-bm-api-key="YOUR_API_KEY"
   data-bm-product-id="product-uuid"
 &gt;&lt;/script&gt;</code></pre>
 
-      <div class="events-log" id="eventsLog">
-        <h4>Event Log</h4>
-        <div id="eventsList"></div>
+        <div class="events-log" id="eventsLog">
+          <h4>Event Log</h4>
+          <div id="eventsList"></div>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- Body Measurement Widget -->
-  <script src="body-measurement-widget.js"></script>
-  <script>
-    // Initialize widget
-    const widget = new BodyMeasurementWidget({
-      apiKey: 'demo_api_key', // Replace with your API key
-      apiUrl: 'http://localhost:8000', // Your API URL
-      productId: null, // Set your product ID for size recommendations
-      theme: 'light',
-      primaryColor: '#6366f1',
-      position: 'bottom-right',
-      buttonText: 'Find My Size',
-      showConfidence: true,
+    <!-- Body Measurement Widget -->
+    <script src="body-measurement-widget.js"></script>
+    <script>
+      // Initialize widget
+      const widget = new BodyMeasurementWidget({
+        apiKey: "demo_api_key", // Replace with your API key
+        apiUrl: "http://localhost:8000", // Your API URL
+        productId: null, // Set your product ID for size recommendations
+        theme: "light",
+        primaryColor: "#6366f1",
+        position: "bottom-right",
+        buttonText: "Find My Size",
+        showConfidence: true,
 
-      // Event callbacks
-      onMeasurement: function(result) {
-        logEvent('success', 'Measurements received: ' + result.valid_people_count + ' person(s) detected');
+        // Event callbacks
+        onMeasurement: function (result) {
+          logEvent(
+            "success",
+            "Measurements received: " +
+              result.valid_people_count +
+              " person(s) detected"
+          );
 
-        if (result.measurements.length > 0) {
-          const person = result.measurements.find(p => p.is_valid);
-          if (person) {
-            logEvent('info', 'Chest: ' + (person.chest_circumference?.toFixed(1) || 'N/A') + ' cm');
-            logEvent('info', 'Waist: ' + (person.waist_circumference?.toFixed(1) || 'N/A') + ' cm');
-            logEvent('info', 'Hip: ' + (person.hip_circumference?.toFixed(1) || 'N/A') + ' cm');
+          if (result.measurements.length > 0) {
+            const person = result.measurements.find((p) => p.is_valid);
+            if (person) {
+              logEvent(
+                "info",
+                "Chest: " +
+                  (person.chest_circumference?.toFixed(1) || "N/A") +
+                  " cm"
+              );
+              logEvent(
+                "info",
+                "Waist: " +
+                  (person.waist_circumference?.toFixed(1) || "N/A") +
+                  " cm"
+              );
+              logEvent(
+                "info",
+                "Hip: " +
+                  (person.hip_circumference?.toFixed(1) || "N/A") +
+                  " cm"
+              );
 
-            // Auto-select recommended size
-            if (person.recommended_size) {
-              selectSize(person.recommended_size);
+              // Auto-select recommended size
+              if (person.recommended_size) {
+                selectSize(person.recommended_size);
+              }
             }
           }
-        }
-      },
+        },
 
-      onSizeRecommendation: function(recommendation) {
-        logEvent('success', 'Size recommendation: ' + recommendation.recommended_size + ' (' + Math.round(recommendation.confidence * 100) + '% confidence)');
-        selectSize(recommendation.recommended_size);
-      },
+        onSizeRecommendation: function (recommendation) {
+          logEvent(
+            "success",
+            "Size recommendation: " +
+              recommendation.recommended_size +
+              " (" +
+              Math.round(recommendation.confidence * 100) +
+              "% confidence)"
+          );
+          selectSize(recommendation.recommended_size);
+        },
 
-      onError: function(error) {
-        logEvent('error', 'Error: ' + error.message);
+        onError: function (error) {
+          logEvent("error", "Error: " + error.message);
+        },
+      });
+
+      // Size selection
+      const sizeOptions = document.querySelectorAll(".size-option");
+      sizeOptions.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          selectSize(btn.dataset.size);
+        });
+      });
+
+      function selectSize(size) {
+        sizeOptions.forEach((btn) => {
+          btn.classList.remove("selected", "recommended");
+          if (btn.dataset.size === size) {
+            btn.classList.add("selected", "recommended");
+          }
+        });
       }
-    });
 
-    // Size selection
-    const sizeOptions = document.querySelectorAll('.size-option');
-    sizeOptions.forEach(btn => {
-      btn.addEventListener('click', () => {
-        selectSize(btn.dataset.size);
-      });
-    });
+      // Event logging
+      function logEvent(type, message) {
+        const eventsList = document.getElementById("eventsList");
+        const event = document.createElement("div");
+        event.className = "event-item " + type;
+        event.textContent = new Date().toLocaleTimeString() + " - " + message;
+        eventsList.insertBefore(event, eventsList.firstChild);
+      }
 
-    function selectSize(size) {
-      sizeOptions.forEach(btn => {
-        btn.classList.remove('selected', 'recommended');
-        if (btn.dataset.size === size) {
-          btn.classList.add('selected', 'recommended');
-        }
-      });
-    }
-
-    // Event logging
-    function logEvent(type, message) {
-      const eventsList = document.getElementById('eventsList');
-      const event = document.createElement('div');
-      event.className = 'event-item ' + type;
-      event.textContent = new Date().toLocaleTimeString() + ' - ' + message;
-      eventsList.insertBefore(event, eventsList.firstChild);
-    }
-
-    logEvent('info', 'Widget initialized - Click "Find My Size" to start');
-  </script>
-</body>
+      logEvent("info", 'Widget initialized - Click "Find My Size" to start');
+    </script>
+  </body>
 </html>

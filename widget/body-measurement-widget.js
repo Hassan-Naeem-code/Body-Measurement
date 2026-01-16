@@ -5,18 +5,18 @@
  */
 
 (function (window, document) {
-  'use strict';
+  "use strict";
 
   // Default configuration
   const DEFAULT_CONFIG = {
     apiKey: null,
-    apiUrl: 'https://api.fitwhisperer.io',
+    apiUrl: "https://api.fitwhisperer.io",
     productId: null,
-    theme: 'light',
-    primaryColor: '#6366f1',
-    position: 'bottom-right',
-    buttonText: 'Find My Size',
-    locale: 'en',
+    theme: "light",
+    primaryColor: "#6366f1",
+    position: "bottom-right",
+    buttonText: "Find My Size",
+    locale: "en",
     showConfidence: true,
     onMeasurement: null,
     onSizeRecommendation: null,
@@ -494,11 +494,16 @@
 
   // Icons
   const ICONS = {
-    ruler: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>',
-    close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
-    upload: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
-    camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>',
-    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>',
+    ruler:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>',
+    close:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+    upload:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
+    camera:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>',
+    check:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>',
   };
 
   // Widget class
@@ -507,14 +512,14 @@
       this.config = { ...DEFAULT_CONFIG, ...config };
       this.state = {
         isOpen: false,
-        step: 'upload', // upload, camera, processing, result
+        step: "upload", // upload, camera, processing, result
         selectedFile: null,
         previewUrl: null,
         measurements: null,
         recommendation: null,
         error: null,
-        fitPreference: 'regular',
-        inputMode: 'upload', // upload or camera
+        fitPreference: "regular",
+        inputMode: "upload", // upload or camera
       };
 
       this.init();
@@ -528,27 +533,30 @@
     }
 
     injectStyles() {
-      const style = document.createElement('style');
-      style.id = 'bm-widget-styles';
+      const style = document.createElement("style");
+      style.id = "bm-widget-styles";
       style.textContent = STYLES;
       document.head.appendChild(style);
 
       // Add CSS variable for primary color
-      document.documentElement.style.setProperty('--bm-primary', this.config.primaryColor);
+      document.documentElement.style.setProperty(
+        "--bm-primary",
+        this.config.primaryColor
+      );
     }
 
     createButton() {
-      this.button = document.createElement('button');
+      this.button = document.createElement("button");
       this.button.className = `bm-widget-button ${this.config.position}`;
       this.button.style.backgroundColor = this.config.primaryColor;
-      this.button.style.color = 'white';
+      this.button.style.color = "white";
       this.button.innerHTML = `${ICONS.ruler}<span>${this.config.buttonText}</span>`;
       document.body.appendChild(this.button);
     }
 
     createModal() {
-      this.overlay = document.createElement('div');
-      this.overlay.className = 'bm-modal-overlay';
+      this.overlay = document.createElement("div");
+      this.overlay.className = "bm-modal-overlay";
       this.overlay.innerHTML = `
         <div class="bm-modal ${this.config.theme}">
           <div class="bm-modal-header">
@@ -640,93 +648,113 @@
       document.body.appendChild(this.overlay);
 
       // Cache elements
-      this.modal = this.overlay.querySelector('.bm-modal');
+      this.modal = this.overlay.querySelector(".bm-modal");
       this.fileInput = this.overlay.querySelector('input[type="file"]');
-      this.uploadArea = this.overlay.querySelector('.bm-upload-area');
-      this.previewImg = this.overlay.querySelector('.bm-preview img');
-      this.video = this.overlay.querySelector('.bm-camera-video');
+      this.uploadArea = this.overlay.querySelector(".bm-upload-area");
+      this.previewImg = this.overlay.querySelector(".bm-preview img");
+      this.video = this.overlay.querySelector(".bm-camera-video");
     }
 
     bindEvents() {
       // Button click
-      this.button.addEventListener('click', () => this.open());
+      this.button.addEventListener("click", () => this.open());
 
       // Close modal
-      this.overlay.addEventListener('click', (e) => {
+      this.overlay.addEventListener("click", (e) => {
         if (e.target === this.overlay) this.close();
       });
-      this.overlay.querySelector('.bm-close-btn').addEventListener('click', () => this.close());
+      this.overlay
+        .querySelector(".bm-close-btn")
+        .addEventListener("click", () => this.close());
 
       // Tab switching
-      this.overlay.querySelectorAll('.bm-tab').forEach(tab => {
-        tab.addEventListener('click', () => this.switchMode(tab.dataset.mode));
+      this.overlay.querySelectorAll(".bm-tab").forEach((tab) => {
+        tab.addEventListener("click", () => this.switchMode(tab.dataset.mode));
       });
 
       // File upload
-      this.uploadArea.addEventListener('click', () => this.fileInput.click());
-      this.fileInput.addEventListener('change', (e) => this.handleFile(e.target.files[0]));
+      this.uploadArea.addEventListener("click", () => this.fileInput.click());
+      this.fileInput.addEventListener("change", (e) =>
+        this.handleFile(e.target.files[0])
+      );
 
       // Drag and drop
-      this.uploadArea.addEventListener('dragover', (e) => {
+      this.uploadArea.addEventListener("dragover", (e) => {
         e.preventDefault();
-        this.uploadArea.classList.add('dragover');
+        this.uploadArea.classList.add("dragover");
       });
-      this.uploadArea.addEventListener('dragleave', () => {
-        this.uploadArea.classList.remove('dragover');
+      this.uploadArea.addEventListener("dragleave", () => {
+        this.uploadArea.classList.remove("dragover");
       });
-      this.uploadArea.addEventListener('drop', (e) => {
+      this.uploadArea.addEventListener("drop", (e) => {
         e.preventDefault();
-        this.uploadArea.classList.remove('dragover');
+        this.uploadArea.classList.remove("dragover");
         if (e.dataTransfer.files[0]) {
           this.handleFile(e.dataTransfer.files[0]);
         }
       });
 
       // Camera capture
-      this.overlay.querySelector('.bm-capture-btn').addEventListener('click', () => this.capturePhoto());
+      this.overlay
+        .querySelector(".bm-capture-btn")
+        .addEventListener("click", () => this.capturePhoto());
 
       // Fit preference
-      this.overlay.querySelectorAll('.bm-fit-option').forEach(btn => {
-        btn.addEventListener('click', () => {
-          this.overlay.querySelectorAll('.bm-fit-option').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
+      this.overlay.querySelectorAll(".bm-fit-option").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          this.overlay
+            .querySelectorAll(".bm-fit-option")
+            .forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
           this.state.fitPreference = btn.dataset.fit;
         });
       });
 
       // Back button
-      this.overlay.querySelector('.bm-back-btn').addEventListener('click', () => this.goToStep('upload'));
+      this.overlay
+        .querySelector(".bm-back-btn")
+        .addEventListener("click", () => this.goToStep("upload"));
 
       // Process button
-      this.overlay.querySelector('.bm-process-btn').addEventListener('click', () => this.processImage());
+      this.overlay
+        .querySelector(".bm-process-btn")
+        .addEventListener("click", () => this.processImage());
 
       // Try again buttons
-      this.overlay.querySelectorAll('.bm-try-again-btn').forEach(btn => {
-        btn.addEventListener('click', () => this.reset());
+      this.overlay.querySelectorAll(".bm-try-again-btn").forEach((btn) => {
+        btn.addEventListener("click", () => this.reset());
       });
     }
 
     open() {
       this.state.isOpen = true;
-      this.overlay.classList.add('open');
-      document.body.style.overflow = 'hidden';
+      this.overlay.classList.add("open");
+      document.body.style.overflow = "hidden";
     }
 
     close() {
       this.state.isOpen = false;
-      this.overlay.classList.remove('open');
-      document.body.style.overflow = '';
+      this.overlay.classList.remove("open");
+      document.body.style.overflow = "";
       this.stopCamera();
     }
 
     switchMode(mode) {
       this.state.inputMode = mode;
-      this.overlay.querySelectorAll('.bm-tab').forEach(t => t.classList.remove('active'));
-      this.overlay.querySelector(`.bm-tab[data-mode="${mode}"]`).classList.add('active');
-      this.overlay.querySelectorAll('.bm-input-mode').forEach(el => el.style.display = 'none');
-      this.overlay.querySelector(`.bm-input-mode[data-mode="${mode}"]`).style.display = 'block';
+      this.overlay
+        .querySelectorAll(".bm-tab")
+        .forEach((t) => t.classList.remove("active"));
+      this.overlay
+        .querySelector(`.bm-tab[data-mode="${mode}"]`)
+        .classList.add("active");
+      this.overlay
+        .querySelectorAll(".bm-input-mode")
+        .forEach((el) => (el.style.display = "none"));
+      this.overlay.querySelector(
+        `.bm-input-mode[data-mode="${mode}"]`
+      ).style.display = "block";
 
-      if (mode === 'camera') {
+      if (mode === "camera") {
         this.startCamera();
       } else {
         this.stopCamera();
@@ -736,38 +764,44 @@
     async startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: 1280, height: 720 }
+          video: { facingMode: "user", width: 1280, height: 720 },
         });
         this.video.srcObject = stream;
         this.stream = stream;
       } catch (err) {
-        console.error('Camera error:', err);
-        this.showError('Could not access camera. Please allow camera permissions or upload an image.');
+        console.error("Camera error:", err);
+        this.showError(
+          "Could not access camera. Please allow camera permissions or upload an image."
+        );
       }
     }
 
     stopCamera() {
       if (this.stream) {
-        this.stream.getTracks().forEach(track => track.stop());
+        this.stream.getTracks().forEach((track) => track.stop());
         this.stream = null;
       }
     }
 
     capturePhoto() {
-      const canvas = document.createElement('canvas');
+      const canvas = document.createElement("canvas");
       canvas.width = this.video.videoWidth;
       canvas.height = this.video.videoHeight;
-      canvas.getContext('2d').drawImage(this.video, 0, 0);
+      canvas.getContext("2d").drawImage(this.video, 0, 0);
 
-      canvas.toBlob(blob => {
-        const file = new File([blob], 'capture.jpg', { type: 'image/jpeg' });
-        this.handleFile(file);
-      }, 'image/jpeg', 0.8);
+      canvas.toBlob(
+        (blob) => {
+          const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
+          this.handleFile(file);
+        },
+        "image/jpeg",
+        0.8
+      );
     }
 
     handleFile(file) {
-      if (!file || !file.type.startsWith('image/')) {
-        this.showError('Please select a valid image file.');
+      if (!file || !file.type.startsWith("image/")) {
+        this.showError("Please select a valid image file.");
         return;
       }
 
@@ -775,32 +809,36 @@
       this.state.previewUrl = URL.createObjectURL(file);
       this.previewImg.src = this.state.previewUrl;
       this.stopCamera();
-      this.goToStep('preview');
+      this.goToStep("preview");
     }
 
     goToStep(step) {
       this.state.step = step;
-      this.overlay.querySelectorAll('.bm-step').forEach(el => el.classList.remove('active'));
-      this.overlay.querySelector(`.bm-step[data-step="${step}"]`).classList.add('active');
+      this.overlay
+        .querySelectorAll(".bm-step")
+        .forEach((el) => el.classList.remove("active"));
+      this.overlay
+        .querySelector(`.bm-step[data-step="${step}"]`)
+        .classList.add("active");
     }
 
     async processImage() {
       if (!this.state.selectedFile) return;
 
-      this.goToStep('processing');
+      this.goToStep("processing");
 
       try {
         // Process measurements
         const formData = new FormData();
-        formData.append('file', this.state.selectedFile);
+        formData.append("file", this.state.selectedFile);
 
         const measurementResponse = await fetch(
           `${this.config.apiUrl}/api/v1/measurements/process-multi?api_key=${this.config.apiKey}`,
-          { method: 'POST', body: formData }
+          { method: "POST", body: formData }
         );
 
         if (!measurementResponse.ok) {
-          throw new Error('Failed to process image');
+          throw new Error("Failed to process image");
         }
 
         const measurementData = await measurementResponse.json();
@@ -811,9 +849,11 @@
         }
 
         // Get valid person
-        const person = measurementData.measurements.find(p => p.is_valid);
+        const person = measurementData.measurements.find((p) => p.is_valid);
         if (!person) {
-          throw new Error('Could not detect a valid body in the image. Please try another photo.');
+          throw new Error(
+            "Could not detect a valid body in the image. Please try another photo."
+          );
         }
 
         // Get size recommendation if product ID is provided
@@ -821,8 +861,8 @@
           const sizeResponse = await fetch(
             `${this.config.apiUrl}/api/v1/brands/products/${this.config.productId}/recommend-size?api_key=${this.config.apiKey}`,
             {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 product_id: this.config.productId,
                 chest_circumference: person.chest_circumference,
@@ -844,8 +884,10 @@
 
         this.showResult(person);
       } catch (err) {
-        console.error('Processing error:', err);
-        this.showError(err.message || 'Failed to process image. Please try again.');
+        console.error("Processing error:", err);
+        this.showError(
+          err.message || "Failed to process image. Please try again."
+        );
         if (this.config.onError) {
           this.config.onError(err);
         }
@@ -854,59 +896,69 @@
 
     showResult(person) {
       const rec = this.state.recommendation;
-      const size = rec?.recommended_size || person.recommended_size || 'M';
-      const fitQuality = rec?.fit_quality || 'good';
+      const size = rec?.recommended_size || person.recommended_size || "M";
+      const fitQuality = rec?.fit_quality || "good";
       const confidence = rec?.confidence || 0.85;
 
       // Update size badge
-      this.overlay.querySelector('.bm-size-badge').textContent = size;
+      this.overlay.querySelector(".bm-size-badge").textContent = size;
 
       // Update fit quality badge
-      const fitQualityEl = this.overlay.querySelector('.bm-fit-quality');
+      const fitQualityEl = this.overlay.querySelector(".bm-fit-quality");
       fitQualityEl.className = `bm-fit-quality ${fitQuality}`;
-      fitQualityEl.innerHTML = `${ICONS.check} ${fitQuality.charAt(0).toUpperCase() + fitQuality.slice(1)} Fit`;
+      fitQualityEl.innerHTML = `${ICONS.check} ${
+        fitQuality.charAt(0).toUpperCase() + fitQuality.slice(1)
+      } Fit`;
 
       // Update subtitle
-      this.overlay.querySelector('.bm-result-subtitle').textContent =
-        this.config.showConfidence ? `${Math.round(confidence * 100)}% confidence` : '';
+      this.overlay.querySelector(".bm-result-subtitle").textContent = this
+        .config.showConfidence
+        ? `${Math.round(confidence * 100)}% confidence`
+        : "";
 
       // Update measurements
       const measurementsHtml = [
-        { label: 'Chest', value: person.chest_circumference },
-        { label: 'Waist', value: person.waist_circumference },
-        { label: 'Hip', value: person.hip_circumference },
-        { label: 'Height', value: person.estimated_height_cm },
+        { label: "Chest", value: person.chest_circumference },
+        { label: "Waist", value: person.waist_circumference },
+        { label: "Hip", value: person.hip_circumference },
+        { label: "Height", value: person.estimated_height_cm },
       ]
-        .filter(m => m.value)
-        .map(m => `
+        .filter((m) => m.value)
+        .map(
+          (m) => `
           <div class="bm-measurement-card">
             <div class="bm-measurement-label">${m.label}</div>
             <div class="bm-measurement-value">${m.value.toFixed(1)} cm</div>
           </div>
-        `).join('');
+        `
+        )
+        .join("");
 
-      this.overlay.querySelector('.bm-measurements').innerHTML = measurementsHtml;
+      this.overlay.querySelector(".bm-measurements").innerHTML =
+        measurementsHtml;
 
       // Update alternatives
-      const altEl = this.overlay.querySelector('.bm-alternatives');
+      const altEl = this.overlay.querySelector(".bm-alternatives");
       if (rec?.alternative_sizes?.length) {
         altEl.innerHTML = `
           <div class="bm-alternatives-title">Also consider:</div>
           <div class="bm-alt-sizes">
-            ${rec.alternative_sizes.map(s => `<span class="bm-alt-size">${s}</span>`).join('')}
+            ${rec.alternative_sizes
+              .map((s) => `<span class="bm-alt-size">${s}</span>`)
+              .join("")}
           </div>
         `;
-        altEl.style.display = 'block';
+        altEl.style.display = "block";
       } else {
-        altEl.style.display = 'none';
+        altEl.style.display = "none";
       }
 
-      this.goToStep('result');
+      this.goToStep("result");
     }
 
     showError(message) {
-      this.overlay.querySelector('.bm-error').textContent = message;
-      this.goToStep('error');
+      this.overlay.querySelector(".bm-error").textContent = message;
+      this.goToStep("error");
     }
 
     reset() {
@@ -915,8 +967,8 @@
       this.state.measurements = null;
       this.state.recommendation = null;
       this.state.error = null;
-      this.fileInput.value = '';
-      this.goToStep('upload');
+      this.fileInput.value = "";
+      this.goToStep("upload");
     }
 
     // Public methods
@@ -924,7 +976,7 @@
       this.close();
       this.button.remove();
       this.overlay.remove();
-      document.getElementById('bm-widget-styles')?.remove();
+      document.getElementById("bm-widget-styles")?.remove();
     }
 
     setProductId(productId) {
@@ -936,8 +988,8 @@
   window.BodyMeasurementWidget = BodyMeasurementWidget;
 
   // Auto-init if data attribute is present
-  document.addEventListener('DOMContentLoaded', () => {
-    const script = document.querySelector('script[data-bm-api-key]');
+  document.addEventListener("DOMContentLoaded", () => {
+    const script = document.querySelector("script[data-bm-api-key]");
     if (script) {
       new BodyMeasurementWidget({
         apiKey: script.dataset.bmApiKey,
@@ -949,5 +1001,4 @@
       });
     }
   });
-
 })(window, document);
