@@ -44,7 +44,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=your-secret-key-change-in-production
       - CORS_ORIGINS=http://localhost:8080
-      - DEBUG=True
+      - DEBUG=False  # Set to True only for local development debugging
     volumes:
       - ./backend:/app
     depends_on:

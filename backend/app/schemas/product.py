@@ -133,6 +133,8 @@ class ProductCreate(ProductBase):
     """Schema for creating a product"""
     # Support for simple size chart format (backward compatible)
     size_chart: Optional[Dict] = Field(None, description="Legacy size chart format as JSON")
+    # List of size charts to create with the product
+    size_charts: Optional[List["SizeChartCreate"]] = Field(None, description="List of size charts to create with the product")
 
 
 class ProductUpdate(BaseModel):

@@ -330,9 +330,10 @@ async def process_measurement(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error processing image: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error processing image: {str(e)}",
+            detail="Error processing image. Please try again or contact support.",
         )
 
 
@@ -427,13 +428,8 @@ async def process_multi_person_measurement(
             request=request
         )
 
-        # DEBUG: Log detection results
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"🔍 DETECTION RESULTS:")
-        logger.error(f"  Total people detected: {result.total_people_detected}")
-        logger.error(f"  Valid people count: {result.valid_people_count}")
-        logger.error(f"  Number of measurements: {len(result.measurements)}")
+        # Log detection results for debugging
+        logger.debug(f"Detection results: {result.total_people_detected} detected, {result.valid_people_count} valid, {len(result.measurements)} measurements")
 
         # Calculate processing time
         processing_time_ms = (time.time() - start_time) * 1000
@@ -455,14 +451,8 @@ async def process_multi_person_measurement(
                 missing_parts = pm.validation_result.missing_parts
                 all_missing_parts.update(missing_parts)
 
-                # DEBUG: Log validation details
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"🔍 DEBUG Validation:")
-                logger.error(f"  Missing parts: {missing_parts}")
-                logger.error(f"  Overall confidence: {pm.validation_result.overall_confidence:.2%}")
-                logger.error(f"  Confidence scores: {pm.validation_result.confidence_scores}")
-                logger.error(f"  Threshold: {settings.BODY_VALIDATION_OVERALL_MIN:.2%}")
+                # Log validation details for debugging
+                logger.debug(f"Validation: missing={missing_parts}, confidence={pm.validation_result.overall_confidence:.2%}")
 
                 # Check if marked as "not human"
                 if "not_human_detected" in missing_parts:
@@ -642,9 +632,10 @@ async def process_multi_person_measurement(
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error processing multi-person image: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error processing image: {str(e)}",
+            detail="Error processing image. Please try again or contact support.",
         )
 
 
@@ -793,10 +784,10 @@ async def run_validation(
         }
 
     except Exception as e:
-        logger.error(f"Validation error: {e}")
+        logger.error(f"Validation error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Validation failed: {str(e)}",
+            detail="Validation failed. Please check your configuration.",
         )
 
 

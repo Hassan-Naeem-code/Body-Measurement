@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { productsAPI } from '@/lib/api';
 import { authHelpers } from '@/lib/auth';
 import { toast } from 'sonner';
+import { useConfirmDialog } from '@/components/ui/confirm-dialog';
 import type { ProductWithSizeCharts, SizeChartCreate } from '@/lib/types';
 import {
   Package,
@@ -26,6 +27,7 @@ const FIT_TYPES = ['tight', 'regular', 'loose'] as const;
 
 export default function ProductsPage() {
   const queryClient = useQueryClient();
+  const { confirm } = useConfirmDialog();
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
   const [editingSizeChart, setEditingSizeChart] = useState<string | null>(null);
@@ -339,9 +341,16 @@ export default function ProductsPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={(e) => {
+                    onClick={async (e) => {
                       e.stopPropagation();
-                      if (confirm('Delete this product?')) {
+                      const confirmed = await confirm({
+                        title: 'Delete Product',
+                        message: `Are you sure you want to delete "${product.name}"? This will also delete all associated size charts.`,
+                        confirmText: 'Delete',
+                        cancelText: 'Cancel',
+                        variant: 'danger',
+                      });
+                      if (confirmed) {
                         deleteProductMutation.mutate(product.id);
                       }
                     }}
@@ -532,8 +541,15 @@ export default function ProductsPage() {
                                 </td>
                                 <td className="px-4 py-3 text-right">
                                   <button
-                                    onClick={() => {
-                                      if (confirm('Delete this size chart?')) {
+                                    onClick={async () => {
+                                      const confirmed = await confirm({
+                                        title: 'Delete Size Chart',
+                                        message: `Are you sure you want to delete the size "${chart.size_name}" chart?`,
+                                        confirmText: 'Delete',
+                                        cancelText: 'Cancel',
+                                        variant: 'danger',
+                                      });
+                                      if (confirmed) {
                                         deleteSizeChartMutation.mutate(chart.id);
                                       }
                                     }}

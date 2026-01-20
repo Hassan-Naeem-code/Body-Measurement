@@ -4,6 +4,7 @@ from typing import List
 import secrets
 
 from app.core.database import get_db
+from app.core.auth import get_brand_by_api_key
 from app.models import Brand, Webhook
 from app.schemas.webhook import (
     WebhookCreate,
@@ -16,22 +17,6 @@ from app.schemas.webhook import (
 from app.services.webhook_service import test_webhook, get_webhook_deliveries
 
 router = APIRouter()
-
-
-def get_brand_by_api_key(api_key: str, db: Session) -> Brand:
-    """Dependency to get brand from API key"""
-    brand = db.query(Brand).filter(Brand.api_key == api_key).first()
-    if not brand:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key",
-        )
-    if not brand.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is inactive",
-        )
-    return brand
 
 
 @router.get("/events", response_model=List[str])

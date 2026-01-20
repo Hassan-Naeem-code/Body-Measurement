@@ -6,6 +6,7 @@ import { authHelpers } from '@/lib/auth';
 import type { Brand } from '@/lib/types';
 import { NavigationGuardProvider } from '@/contexts/NavigationGuardContext';
 import { GuardedLink } from '@/components/ui/guarded-link';
+import { ConfirmDialogProvider } from '@/components/ui/confirm-dialog';
 import {
   LayoutDashboard,
   ImagePlus,
@@ -111,6 +112,7 @@ export default function DashboardLayout({
   }
 
   return (
+    <ConfirmDialogProvider>
     <NavigationGuardProvider>
     <div className="min-h-screen bg-gray-50">
       {/* Desktop Sidebar */}
@@ -283,5 +285,6 @@ export default function DashboardLayout({
       </main>
     </div>
     </NavigationGuardProvider>
+    </ConfirmDialogProvider>
   );
 }

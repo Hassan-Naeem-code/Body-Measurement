@@ -77,6 +77,9 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
+# Add rate limiting middleware (added first, runs last)
+app.add_middleware(SlowAPIMiddleware)
+
 # Custom middleware to handle client disconnection gracefully
 @app.middleware("http")
 async def handle_client_disconnect(request: Request, call_next):
@@ -97,17 +100,15 @@ async def handle_client_disconnect(request: Request, call_next):
         logger.error(f"Error processing request {request.url.path}: {str(e)}")
         raise
 
-# Configure CORS
+# Configure CORS with explicit methods and headers
+# Added LAST so it runs FIRST and handles preflight OPTIONS requests properly
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=["*"],  # Allow all origins in development - restrict in production
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["*"],  # Allow all headers
 )
-
-# Add rate limiting middleware
-app.add_middleware(SlowAPIMiddleware)
 
 # Include routers
 app.include_router(

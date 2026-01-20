@@ -90,6 +90,15 @@ export default function UploadPage() {
     };
   }, [cancelPendingRequest]);
 
+  // Cleanup Object URL to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
   // Block navigation when processing is in progress
   useEffect(() => {
     setNavigationBlocked(
@@ -179,14 +188,13 @@ export default function UploadPage() {
       toast.success('Image processed successfully');
     } catch (err: unknown) {
       if (axios.isCancel(err) || (err instanceof Error && err.name === 'AbortError')) {
-        console.log('Request was cancelled');
+        // Request was cancelled by user - no action needed
         return;
       }
 
       const error = err as { response?: { data?: { detail?: string } }; message?: string };
       const errorMessage = error.response?.data?.detail || error.message || 'Failed to process image. Please try again.';
       setError(errorMessage);
-      console.error(err);
     } finally {
       setLoading(false);
       abortControllerRef.current = null;
