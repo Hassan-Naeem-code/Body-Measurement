@@ -26,11 +26,15 @@ import {
   AlertTriangle,
   Eye,
   EyeOff,
+  Box,
+  RotateCcw,
 } from 'lucide-react';
 import { MeasurementVisualization } from '@/components/measurement-visualization';
 import { PDFExportButton } from '@/components/pdf-export-button';
 import { CameraCapture } from '@/components/camera-capture';
 import { SizeRecommendations } from '@/components/size-recommendations';
+import { SizeResultCard } from '@/components/size-result-card';
+import Body3DViewer from '@/components/body-3d-viewer';
 
 // Utility function to format file size
 const formatFileSize = (bytes: number): string => {
@@ -47,6 +51,70 @@ const formatTime = (ms: number): string => {
     return (ms / 1000).toFixed(2) + 's';
   }
   return Math.round(ms) + 'ms';
+};
+
+// Utility function to crop an image based on a bounding box
+const cropImageToBoundingBox = (
+  imageUrl: string,
+  boundingBox: { x1: number; y1: number; x2: number; y2: number },
+  padding: number = 0.1 // 10% padding around the person
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const img = document.createElement('img');
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Could not get canvas context'));
+        return;
+      }
+
+      // Convert normalized coordinates (0-1) to pixel coordinates
+      const imgWidth = img.naturalWidth;
+      const imgHeight = img.naturalHeight;
+
+      const x1 = boundingBox.x1 * imgWidth;
+      const y1 = boundingBox.y1 * imgHeight;
+      const x2 = boundingBox.x2 * imgWidth;
+      const y2 = boundingBox.y2 * imgHeight;
+
+      // Calculate crop dimensions with padding
+      const boxWidth = x2 - x1;
+      const boxHeight = y2 - y1;
+      const paddingX = boxWidth * padding;
+      const paddingY = boxHeight * padding;
+
+      // Apply padding but keep within image bounds
+      const cropX = Math.max(0, x1 - paddingX);
+      const cropY = Math.max(0, y1 - paddingY);
+      const cropWidth = Math.min(imgWidth - cropX, boxWidth + 2 * paddingX);
+      const cropHeight = Math.min(imgHeight - cropY, boxHeight + 2 * paddingY);
+
+      // Set canvas size to the crop dimensions
+      canvas.width = cropWidth;
+      canvas.height = cropHeight;
+
+      // Draw the cropped portion
+      ctx.drawImage(
+        img,
+        cropX, cropY, cropWidth, cropHeight, // Source rectangle
+        0, 0, cropWidth, cropHeight // Destination rectangle
+      );
+
+      // Convert to blob URL
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const croppedUrl = URL.createObjectURL(blob);
+          resolve(croppedUrl);
+        } else {
+          reject(new Error('Failed to create cropped image'));
+        }
+      }, 'image/png');
+    };
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = imageUrl;
+  });
 };
 
 export default function UploadPage() {
@@ -66,6 +134,18 @@ export default function UploadPage() {
 
   // Camera capture
   const [showCamera, setShowCamera] = useState(false);
+
+  // 3D Viewer
+  const [show3DViewer, setShow3DViewer] = useState(false);
+  const [viewer3DPerson, setViewer3DPerson] = useState<{
+    height: number;
+    gender: 'male' | 'female' | 'neutral';
+    chest: number;
+    waist: number;
+    hip: number;
+    imageUrl?: string; // URL of the uploaded image for texture mapping
+  } | null>(null);
+  const [viewer3DMode, setViewer3DMode] = useState<'mannequin' | 'texture' | 'depth2.5d' | 'pifuhd'>('mannequin');
 
   // Navigation guard context
   const { setNavigationBlocked } = useNavigationGuardContext();
@@ -98,6 +178,29 @@ export default function UploadPage() {
       }
     };
   }, [previewUrl]);
+
+  // Cleanup cropped image URL when 3D viewer closes or changes
+  const croppedImageUrlRef = useRef<string | null>(null);
+  useEffect(() => {
+    // If imageUrl is a blob URL (starts with blob:) and different from previewUrl, it's a cropped image
+    if (viewer3DPerson?.imageUrl &&
+        viewer3DPerson.imageUrl.startsWith('blob:') &&
+        viewer3DPerson.imageUrl !== previewUrl) {
+      // Revoke previous cropped URL if it exists
+      if (croppedImageUrlRef.current && croppedImageUrlRef.current !== viewer3DPerson.imageUrl) {
+        URL.revokeObjectURL(croppedImageUrlRef.current);
+      }
+      croppedImageUrlRef.current = viewer3DPerson.imageUrl;
+    }
+
+    return () => {
+      // Cleanup on unmount
+      if (croppedImageUrlRef.current) {
+        URL.revokeObjectURL(croppedImageUrlRef.current);
+        croppedImageUrlRef.current = null;
+      }
+    };
+  }, [viewer3DPerson?.imageUrl, previewUrl]);
 
   // Block navigation when processing is in progress
   useEffect(() => {
@@ -208,9 +311,52 @@ export default function UploadPage() {
     setResult(null);
     setError('');
     setLoading(false);
+    setShow3DViewer(false);
+    setViewer3DPerson(null);
+    // Cleanup cropped image URL
+    if (croppedImageUrlRef.current) {
+      URL.revokeObjectURL(croppedImageUrlRef.current);
+      croppedImageUrlRef.current = null;
+    }
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  // Open 3D viewer for a person
+  const handleView3D = async (person: {
+    estimated_height_cm?: number | null;
+    gender?: string | null;
+    chest_circumference?: number | null;
+    waist_circumference?: number | null;
+    hip_circumference?: number | null;
+    bounding_box?: { x1: number; y1: number; x2: number; y2: number } | null;
+  }) => {
+    let imageUrl: string | undefined = undefined;
+
+    // If we have a bounding box, crop the image to show only this person
+    if (previewUrl && person.bounding_box) {
+      try {
+        imageUrl = await cropImageToBoundingBox(previewUrl, person.bounding_box, 0.15);
+      } catch (err) {
+        console.error('Failed to crop image:', err);
+        // Fall back to full image if cropping fails
+        imageUrl = previewUrl;
+      }
+    } else if (previewUrl) {
+      // No bounding box available, use full image
+      imageUrl = previewUrl;
+    }
+
+    setViewer3DPerson({
+      height: person.estimated_height_cm ?? 170,
+      gender: (person.gender === 'male' || person.gender === 'female') ? person.gender : 'neutral',
+      chest: person.chest_circumference ?? 95,
+      waist: person.waist_circumference ?? 80,
+      hip: person.hip_circumference ?? 95,
+      imageUrl,
+    });
+    setShow3DViewer(true);
   };
 
   return (
@@ -581,182 +727,32 @@ export default function UploadPage() {
             </div>
           </div>
 
-          {/* Display Each Person */}
+          {/* Display Each Person - Clean Size Result Cards */}
           {result.measurements.map((person) => (
-            <div
-              key={person.person_id}
-              className="rounded-2xl border-2 border-border bg-card overflow-hidden shadow-card"
-            >
-              {/* Person Header */}
-              <div className="p-6 border-b border-border bg-muted/30">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div
-                      className={`w-14 h-14 rounded-2xl flex items-center justify-center ${
-                        person.is_valid ? 'gradient-primary' : 'bg-destructive-muted'
-                      }`}
-                    >
-                      <User
-                        className={`w-7 h-7 ${
-                          person.is_valid ? 'text-white' : 'text-destructive'
-                        }`}
-                      />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-xl font-bold text-foreground">
-                          Person {person.person_id + 1}
-                        </h3>
-                        {person.demographic_label && (
-                          <span className="badge badge-primary">{person.demographic_label}</span>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-3 mt-2 text-sm text-muted-foreground">
-                        <span>Detection: {(person.detection_confidence * 100).toFixed(0)}%</span>
-                        <span>Validation: {(person.validation_confidence * 100).toFixed(0)}%</span>
-                        {person.estimated_height_cm && (
-                          <span>Height: {person.estimated_height_cm.toFixed(1)} cm</span>
-                        )}
-                      </div>
-                      {person.gender && person.age_group && (
-                        <div className="flex gap-2 mt-2">
-                          <span className="badge bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
-                            {person.gender === 'male' ? 'Male' : 'Female'} ({(person.gender_confidence! * 100).toFixed(0)}%)
-                          </span>
-                          <span className="badge bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                            {person.age_group.charAt(0).toUpperCase() + person.age_group.slice(1)} ({(person.age_confidence! * 100).toFixed(0)}%)
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <span
-                    className={`badge px-4 py-2 text-sm font-semibold ${
-                      person.is_valid
-                        ? 'bg-success-muted text-success-foreground'
-                        : 'bg-destructive-muted text-destructive'
-                    }`}
+            <div key={person.person_id} className="space-y-3">
+              <SizeResultCard person={person} personIndex={person.person_id} />
+
+              {/* Additional actions for valid persons */}
+              {person.is_valid && (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => handleView3D(person)}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50 transition-colors"
                   >
-                    {person.is_valid ? 'Valid' : 'Invalid'}
-                  </span>
-                </div>
-              </div>
+                    <Box className="w-4 h-4" />
+                    View 3D Body Model
+                  </button>
 
-              {person.is_valid && person.recommended_size ? (
-                <div className="p-6 space-y-6">
-                  {/* Recommended Size */}
-                  <div className="p-6 rounded-xl bg-primary-muted border border-primary/20">
-                    <p className="text-sm font-medium text-primary uppercase tracking-wide">
-                      Recommended Size
-                    </p>
-                    <p className="text-5xl font-bold text-primary mt-2">
-                      {person.recommended_size}
-                    </p>
-                  </div>
-
-                  {/* Circumference Measurements */}
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-2">
-                      <span className="badge badge-success">95%+ ACCURACY</span>
-                      <h4 className="font-semibold text-foreground">Circumference Measurements</h4>
+                  {/* Product Size Recommendations - Expandable */}
+                  <details className="w-full mt-2">
+                    <summary className="cursor-pointer px-4 py-2 rounded-lg text-sm font-medium bg-muted hover:bg-muted/80 transition-colors inline-flex items-center gap-2">
+                      <Ruler className="w-4 h-4" />
+                      View Product-Specific Sizes
+                    </summary>
+                    <div className="mt-3">
+                      <SizeRecommendations measurements={person} />
                     </div>
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {[
-                        { label: 'Chest', value: person.chest_circumference },
-                        { label: 'Waist', value: person.waist_circumference },
-                        { label: 'Hip', value: person.hip_circumference },
-                        { label: 'Arm', value: person.arm_circumference },
-                        { label: 'Thigh', value: person.thigh_circumference },
-                      ].map(
-                        (measurement) =>
-                          measurement.value && (
-                            <div
-                              key={measurement.label}
-                              className="p-4 rounded-xl bg-success-muted/50 border border-success/20"
-                            >
-                              <p className="text-sm text-muted-foreground">{measurement.label} Circumference</p>
-                              <p className="text-2xl font-bold text-foreground mt-1">
-                                {measurement.value.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">cm</span>
-                              </p>
-                            </div>
-                          )
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Width Measurements */}
-                  <div className="space-y-4">
-                    <h4 className="font-semibold text-foreground">Width Measurements (Reference)</h4>
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {[
-                        { label: 'Shoulder Width', value: person.shoulder_width },
-                        { label: 'Inseam', value: person.inseam },
-                        { label: 'Arm Length', value: person.arm_length },
-                      ].map(
-                        (measurement) =>
-                          measurement.value && (
-                            <div
-                              key={measurement.label}
-                              className="p-4 rounded-xl bg-muted/50 border border-border"
-                            >
-                              <p className="text-sm text-muted-foreground">{measurement.label}</p>
-                              <p className="text-2xl font-bold text-foreground mt-1">
-                                {measurement.value.toFixed(1)} <span className="text-sm font-normal text-muted-foreground">cm</span>
-                              </p>
-                            </div>
-                          )
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Size Probabilities */}
-                  {person.size_probabilities && (
-                    <div className="space-y-4">
-                      <h4 className="font-semibold text-foreground">Size Distribution</h4>
-                      <div className="space-y-3">
-                        {Object.entries(person.size_probabilities)
-                          .sort(([, a], [, b]) => b - a)
-                          .map(([size, probability]) => (
-                            <div key={size}>
-                              <div className="flex items-center justify-between mb-1.5">
-                                <span className="text-sm font-medium text-foreground">Size {size}</span>
-                                <span className="text-sm text-muted-foreground">{(probability * 100).toFixed(1)}%</span>
-                              </div>
-                              <div className="progress-bar">
-                                <div
-                                  className="progress-bar-fill"
-                                  style={{ width: `${probability * 100}%` }}
-                                />
-                              </div>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Product Size Recommendations */}
-                  <SizeRecommendations measurements={person} />
-                </div>
-              ) : (
-                <div className="p-6">
-                  <div className="p-6 rounded-xl bg-destructive-muted/50 border border-destructive/20">
-                    <div className="flex items-start gap-4">
-                      <AlertTriangle className="w-6 h-6 text-destructive flex-shrink-0" />
-                      <div>
-                        <p className="font-semibold text-foreground">
-                          This person was filtered out because:
-                        </p>
-                        <ul className="mt-2 space-y-1 text-muted-foreground">
-                          {person.missing_parts.map((part, idx) => (
-                            <li key={idx} className="flex items-center gap-2">
-                              <span className="w-1.5 h-1.5 rounded-full bg-destructive" />
-                              {part.replace(/_/g, ' ')}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
+                  </details>
                 </div>
               )}
             </div>
@@ -779,6 +775,63 @@ export default function UploadPage() {
           onCapture={handleFile}
           onClose={() => setShowCamera(false)}
         />
+      )}
+
+      {/* 3D Body Viewer Modal */}
+      {show3DViewer && viewer3DPerson && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-5xl bg-card rounded-2xl overflow-hidden shadow-2xl border border-border">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-border bg-muted/30">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+                  <Box className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-foreground">3D Body View</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Drag to rotate • Scroll to zoom • Based on your measurements
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShow3DViewer(false)}
+                className="p-2 rounded-lg hover:bg-muted transition-colors"
+              >
+                <X className="w-5 h-5 text-muted-foreground" />
+              </button>
+            </div>
+
+            {/* 3D Viewer */}
+            <div className="relative">
+              <Body3DViewer
+                heightCm={viewer3DPerson.height}
+                gender={viewer3DPerson.gender}
+                showControls={true}
+                showMeasurements={true}
+                autoRotate={true}
+                className="h-[70vh] min-h-[500px]"
+                imageUrl={viewer3DPerson.imageUrl}
+                viewMode={viewer3DMode}
+                onViewModeChange={setViewer3DMode}
+              />
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-border bg-muted/30 flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">Your measurements:</span>{' '}
+                Height {viewer3DPerson.height}cm • Chest {viewer3DPerson.chest}cm • Waist {viewer3DPerson.waist}cm • Hip {viewer3DPerson.hip}cm
+              </div>
+              <Button
+                onClick={() => setShow3DViewer(false)}
+                variant="outline"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

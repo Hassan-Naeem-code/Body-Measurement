@@ -13,7 +13,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.routes import auth, measurements, brands, products, webhooks, batch
+from app.routes import auth, measurements, brands, products, webhooks, batch, mesh3d, depth
 
 # Configure logging
 logging.basicConfig(
@@ -145,6 +145,18 @@ app.include_router(
     batch.router,
     prefix=f"{settings.API_V1_PREFIX}/batch",
     tags=["Batch Processing"],
+)
+
+app.include_router(
+    mesh3d.router,
+    prefix=f"{settings.API_V1_PREFIX}/mesh3d",
+    tags=["3D Body Mesh"],
+)
+
+app.include_router(
+    depth.router,
+    prefix=f"{settings.API_V1_PREFIX}/depth",
+    tags=["Depth Estimation"],
 )
 
 
