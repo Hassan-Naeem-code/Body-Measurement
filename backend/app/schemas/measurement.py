@@ -1,7 +1,5 @@
 from pydantic import BaseModel, Field
 from typing import Dict, List, Optional
-from uuid import UUID
-from datetime import datetime
 
 
 class PoseLandmark(BaseModel):
@@ -54,26 +52,7 @@ class MeasurementResponse(BaseModel):
         from_attributes = True
 
 
-class MeasurementRecord(BaseModel):
-    id: UUID
-    brand_id: UUID
-    shoulder_width: float
-    chest_width: float
-    waist_width: float
-    hip_width: float
-    inseam: float
-    arm_length: float
-    confidence_scores: Dict[str, float]
-    recommended_size: str
-    size_probabilities: Dict[str, float]
-    processing_time_ms: float
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-# NEW: Multi-person schemas
+# Multi-person schemas
 
 class PersonMeasurementResponse(BaseModel):
     """Measurement data for one person in the image"""

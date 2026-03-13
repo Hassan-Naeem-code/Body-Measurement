@@ -7,7 +7,6 @@ from app.schemas.brand import (
 )
 from app.schemas.measurement import (
     MeasurementResponse,
-    MeasurementRecord,
     PersonMeasurementResponse,
     MultiPersonMeasurementResponse,
     PoseLandmark,
@@ -33,7 +32,6 @@ __all__ = [
     "BrandWithToken",
     "UsageStats",
     "MeasurementResponse",
-    "MeasurementRecord",
     "PersonMeasurementResponse",
     "MultiPersonMeasurementResponse",
     "PoseLandmark",
