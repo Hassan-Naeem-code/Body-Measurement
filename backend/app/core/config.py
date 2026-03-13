@@ -82,6 +82,9 @@ class Settings(BaseSettings):
     YOLO_MODEL_SIZE: str = "yolov8m.pt"
     YOLO_CONFIDENCE_THRESHOLD: float = 0.5
 
+    # MiDaS Depth Estimation Settings
+    MIDAS_MODEL: str = "DPT_Small"  # Options: DPT_Small, DPT_Hybrid, DPT_Large
+
     # Body Validation Settings
     # Production thresholds - balanced for accuracy while allowing real-world images
     BODY_VALIDATION_HEAD_THRESHOLD: float = 0.5

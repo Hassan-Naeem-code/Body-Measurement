@@ -6,7 +6,12 @@ Provides depth map from a single 2D image
 import torch
 import cv2
 import numpy as np
+import logging
 from typing import Optional
+
+from app.core.retry import with_retry
+
+logger = logging.getLogger(__name__)
 
 
 class DepthEstimator:
@@ -28,18 +33,29 @@ class DepthEstimator:
         self.model_type = model_type
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # Load MiDaS model
-        self.model = torch.hub.load("intel-isl/MiDaS", model_type)
+        # Load MiDaS model with retry (torch.hub downloads from network)
+        self.model = self._load_model(model_type)
         self.model.to(self.device)
         self.model.eval()
 
-        # Load transforms
-        midas_transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
+        # Load transforms with retry
+        self.transform = self._load_transforms(model_type)
 
-        if model_type == "DPT_Large" or model_type == "DPT_Hybrid":
-            self.transform = midas_transforms.dpt_transform
-        else:
-            self.transform = midas_transforms.small_transform
+    @staticmethod
+    @with_retry(max_retries=3, base_delay=2.0)
+    def _load_model(model_type: str):
+        """Load MiDaS model from torch hub with retry on network failure."""
+        logger.info("Loading MiDaS model: %s", model_type)
+        return torch.hub.load("intel-isl/MiDaS", model_type)
+
+    @staticmethod
+    @with_retry(max_retries=3, base_delay=2.0)
+    def _load_transforms(model_type: str):
+        """Load MiDaS transforms from torch hub with retry on network failure."""
+        midas_transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
+        if model_type in ("DPT_Large", "DPT_Hybrid"):
+            return midas_transforms.dpt_transform
+        return midas_transforms.small_transform
 
     def estimate_depth(self, image: np.ndarray) -> np.ndarray:
         """

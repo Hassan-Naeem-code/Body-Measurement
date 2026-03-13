@@ -286,6 +286,17 @@ class KeypointOptimizer:
             loss += 0.001 * torch.sum(betas ** 2)  # Shape regularization
             loss += 0.0001 * torch.sum(body_pose ** 2)  # Pose regularization
 
+            # Body proportion constraint: shoulder-to-hip ratio from 2D keypoints
+            # constrains betas to produce realistic body shapes
+            if 11 < len(keypoints_2d) and 24 < len(keypoints_2d):
+                kp_sh_w = abs(keypoints_2d[12, 0] - keypoints_2d[11, 0])
+                kp_hp_w = abs(keypoints_2d[24, 0] - keypoints_2d[23, 0])
+                if kp_sh_w > 0.01 and kp_hp_w > 0.01:
+                    observed_ratio = kp_sh_w / kp_hp_w
+                    # Penalize betas that produce very different proportions
+                    proportion_reg = 0.01 * (betas[0, 1] - (observed_ratio - 1.15)) ** 2
+                    loss += proportion_reg
+
             loss.backward()
             optimizer.step()
 
@@ -307,10 +318,14 @@ class MeshSlicer:
     """
 
     # Standard measurement levels (as fraction of body height from ground)
+    # Based on anthropometric standards (ISO 8559, CAESAR dataset):
+    #   Chest/bust: nipple line at ~74% of stature from ground
+    #   Waist: natural waist (narrowest point) at ~62% of stature
+    #   Hip: maximum hip girth at ~52% of stature
     MEASUREMENT_LEVELS = {
-        'chest': 0.72,   # Nipple line (approx 72% of height from ground)
-        'waist': 0.62,   # Natural waist (approx 62% of height)
-        'hip': 0.52,     # Hip level (approx 52% of height)
+        'chest': 0.74,   # Nipple line (ISO 8559: ~74% of stature from ground)
+        'waist': 0.62,   # Natural waist / narrowest torso point
+        'hip': 0.52,     # Maximum hip circumference level
     }
 
     def __init__(self):

@@ -13,7 +13,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.routes import auth, measurements, brands, products, webhooks, batch, mesh3d, depth
+from app.routes import auth, measurements, brands, products, webhooks, batch, mesh3d, depth, validation
 
 # Configure logging
 logging.basicConfig(
@@ -157,6 +157,12 @@ app.include_router(
     depth.router,
     prefix=f"{settings.API_V1_PREFIX}/depth",
     tags=["Depth Estimation"],
+)
+
+app.include_router(
+    validation.router,
+    prefix=f"{settings.API_V1_PREFIX}/validation",
+    tags=["Validation & Ground Truth"],
 )
 
 

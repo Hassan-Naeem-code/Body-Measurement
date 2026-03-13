@@ -22,6 +22,7 @@ import {
   Settings,
   History,
   Code2,
+  Ruler,
 } from 'lucide-react';
 
 interface NavItem {
@@ -37,6 +38,7 @@ const navItems: NavItem[] = [
   { name: 'Products', href: '/dashboard/products', Icon: ShoppingBag },
   { name: 'Analytics', href: '/dashboard/analytics', Icon: LineChart },
   { name: 'History', href: '/dashboard/history', Icon: History, badge: 'New' },
+  { name: 'Collect Data', href: '/dashboard/collect', Icon: Ruler, badge: 'New' },
   { name: 'SDK & APIs', href: '/dashboard/sdk', Icon: Code2 },
   { name: 'API Keys', href: '/dashboard/api-keys', Icon: KeySquare },
 ];

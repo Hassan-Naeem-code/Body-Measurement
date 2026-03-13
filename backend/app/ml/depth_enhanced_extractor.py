@@ -84,7 +84,7 @@ class DepthEnhancedCircumferenceExtractor:
     def __init__(
         self,
         use_midas: bool = True,
-        midas_model: str = "DPT_Hybrid",
+        midas_model: str = None,
         use_trained_predictor: bool = True
     ):
         """
@@ -92,9 +92,15 @@ class DepthEnhancedCircumferenceExtractor:
 
         Args:
             use_midas: Whether to use MiDaS depth estimation
-            midas_model: MiDaS model type ('DPT_Small', 'DPT_Hybrid', 'DPT_Large')
+            midas_model: MiDaS model type. Defaults to config MIDAS_MODEL setting.
             use_trained_predictor: Whether to use trained neural network for ratio prediction
         """
+        if midas_model is None:
+            try:
+                from app.core.config import settings
+                midas_model = settings.MIDAS_MODEL
+            except Exception:
+                midas_model = "DPT_Small"
         self.use_midas = use_midas
         self.depth_estimator = None
         self.trained_predictor = None
@@ -291,6 +297,18 @@ class DepthEnhancedCircumferenceExtractor:
         try:
             # Get full depth map from MiDaS
             depth_map = self.depth_estimator.estimate_depth(image)
+
+            # Validate depth map quality before using it
+            depth_std = np.std(depth_map)
+            depth_range = depth_map.max() - depth_map.min()
+            if depth_std < 0.02 or depth_range < 0.05:
+                # Flat/useless depth map — MiDaS failed to produce meaningful depth
+                logger.warning(
+                    "MiDaS depth map has insufficient variance (std=%.4f, range=%.4f). "
+                    "Falling back to rule-based ratios.",
+                    depth_std, depth_range,
+                )
+                return self._get_fallback_depth_data()
 
             # Get landmark positions in pixels
             left_shoulder = self._get_landmark(pose_landmarks, "LEFT_SHOULDER")

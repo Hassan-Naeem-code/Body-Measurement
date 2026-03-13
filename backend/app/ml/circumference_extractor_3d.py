@@ -228,45 +228,71 @@ class Circumference3DExtractor:
         # Calculate pose angle
         pose_angle = self._calculate_pose_angle(pose_landmarks)
 
-        # Build confidence scores
-        base_confidence = 0.95 if mesh_measurements.method == 'smpl_mesh_slicing' else 0.85
+        # Build confidence scores dynamically from mesh quality + pose visibility
+        mesh_conf = mesh_measurements.confidence
+        avg_visibility = np.mean([
+            self._get_landmark(pose_landmarks, name).get("visibility", 0.5)
+            for name in ["LEFT_SHOULDER", "RIGHT_SHOULDER", "LEFT_HIP", "RIGHT_HIP"]
+        ])
+        # Blend mesh confidence (70%) with pose visibility (30%)
+        quality_factor = 0.7 * mesh_conf + 0.3 * avg_visibility
         confidence_scores = {
-            "chest_circumference": min(0.98, base_confidence + 0.02),
-            "waist_circumference": min(0.97, base_confidence + 0.01),
-            "hip_circumference": min(0.98, base_confidence + 0.02),
-            "shoulder_width": min(0.96, base_confidence),
-            "inseam": min(0.94, base_confidence - 0.02),
-            "arm_length": min(0.93, base_confidence - 0.03),
+            "chest_circumference": min(0.98, quality_factor),
+            "waist_circumference": min(0.97, quality_factor * 0.98),
+            "hip_circumference": min(0.98, quality_factor),
+            "shoulder_width": min(0.96, quality_factor * 0.97),
+            "inseam": min(0.94, quality_factor * 0.95),
+            "arm_length": min(0.93, quality_factor * 0.93),
             "method": mesh_measurements.method,
-            "3d_confidence": mesh_measurements.confidence,
+            "3d_confidence": mesh_conf,
         }
 
-        # Create depth data for compatibility
+        # Derive depth ratios from actual 3D mesh instead of hardcoding
+        chest_circ = mesh_measurements.chest_circumference
+        waist_circ = mesh_measurements.waist_circumference
+        hip_circ = mesh_measurements.hip_circumference
+        chest_w = widths.get('chest_width', chest_circ / np.pi)
+        waist_w = widths.get('waist_width', waist_circ / np.pi)
+        hip_w = widths.get('hip_width', hip_circ / np.pi)
+
+        # Depth = circumference derived via ellipse: C ≈ π*(a+b), depth = C/π - width
+        chest_depth_est = max(0.3, (chest_circ / np.pi - chest_w)) if chest_w > 0 else 0.5
+        waist_depth_est = max(0.3, (waist_circ / np.pi - waist_w)) if waist_w > 0 else 0.5
+        hip_depth_est = max(0.3, (hip_circ / np.pi - hip_w)) if hip_w > 0 else 0.5
+
         depth_data = DepthMeasurementData(
-            chest_depth_ratio=0.65,  # Approximated from 3D mesh
-            waist_depth_ratio=0.60,
-            hip_depth_ratio=0.62,
-            chest_depth=0.5,
-            waist_depth=0.5,
-            hip_depth=0.5,
+            chest_depth_ratio=chest_depth_est / chest_w if chest_w > 0 else 0.65,
+            waist_depth_ratio=waist_depth_est / waist_w if waist_w > 0 else 0.60,
+            hip_depth_ratio=hip_depth_est / hip_w if hip_w > 0 else 0.62,
+            chest_depth=chest_depth_est,
+            waist_depth=waist_depth_est,
+            hip_depth=hip_depth_est,
             front_depth=0.5,
             back_depth=0.35,
-            depth_confidence=mesh_measurements.confidence,
+            depth_confidence=mesh_conf,
             method='3d_mesh_reconstruction'
         )
 
+        # Derive arm and thigh circumferences from mesh proportions
+        # rather than magic numbers
+        arm_circ = (
+            widths['arm_width'] * 2.5 if 'arm_width' in widths
+            else chest_circ * 0.30  # typical: arm circ ≈ 30% of chest circ
+        )
+        thigh_circ = hip_circ * 0.55  # well-established anthropometric ratio
+
         return CircumferenceMeasurements(
-            chest_circumference=mesh_measurements.chest_circumference,
-            waist_circumference=mesh_measurements.waist_circumference,
-            hip_circumference=mesh_measurements.hip_circumference,
-            arm_circumference=widths['arm_width'] * 2.5 if 'arm_width' in widths else 25.0,
-            thigh_circumference=mesh_measurements.hip_circumference * 0.55,
-            shoulder_width=mesh_measurements.shoulder_width or widths.get('shoulder_width', 40.0),
-            chest_width=widths.get('chest_width', mesh_measurements.chest_circumference / 3.0),
-            waist_width=widths.get('waist_width', mesh_measurements.waist_circumference / 3.2),
-            hip_width=widths.get('hip_width', mesh_measurements.hip_circumference / 3.0),
-            inseam=mesh_measurements.inseam or widths.get('inseam', 75.0),
-            arm_length=mesh_measurements.arm_length or widths.get('arm_length', 55.0),
+            chest_circumference=chest_circ,
+            waist_circumference=waist_circ,
+            hip_circumference=hip_circ,
+            arm_circumference=arm_circ,
+            thigh_circumference=thigh_circ,
+            shoulder_width=mesh_measurements.shoulder_width or widths.get('shoulder_width', chest_circ / np.pi * 1.15),
+            chest_width=widths.get('chest_width', chest_circ / np.pi),
+            waist_width=widths.get('waist_width', waist_circ / np.pi),
+            hip_width=widths.get('hip_width', hip_circ / np.pi),
+            inseam=mesh_measurements.inseam or widths.get('inseam', mesh_measurements.height * 0.45),
+            arm_length=mesh_measurements.arm_length or widths.get('arm_length', mesh_measurements.height * 0.33),
             estimated_height_cm=mesh_measurements.height,
             pose_angle_degrees=pose_angle,
             confidence_scores=confidence_scores,
