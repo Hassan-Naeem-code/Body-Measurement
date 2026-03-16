@@ -29,10 +29,42 @@ class ProductSizeRecommendation:
     fit_type: str = "regular"
 
 
+# Category-aware measurement adjustments (cm)
+# When body measurements come from a photo where the person is wearing
+# heavier clothing, these offsets adjust circumferences toward true body size.
+# Used when the product being purchased differs from what's being worn.
+CATEGORY_EASE_ALLOWANCE = {
+    # Product category: how much ease (extra cm) the garment typically has
+    # beyond body measurements. Size charts already include this.
+    "t-shirt": 0,
+    "shirt": 0,
+    "blouse": 0,
+    "polo": 0,
+    "tank_top": 0,
+    "dress": 0,
+    "sweater": 2,
+    "hoodie": 4,
+    "jacket": 6,
+    "coat": 8,
+    "blazer": 4,
+    "vest": 1,
+    "pants": 0,
+    "jeans": 0,
+    "shorts": 0,
+    "skirt": 0,
+    # Default for unknown categories
+    "general": 0,
+}
+
+
 class ProductAwareSizeRecommender:
     """
-    Recommends clothing sizes using product-specific size charts
-    Falls back to demographic charts if no product specified
+    Recommends clothing sizes using product-specific size charts.
+    Falls back to demographic charts if no product specified.
+
+    Supports category-aware adjustment: if the product being purchased
+    has different ease allowance than the detected clothing, measurements
+    are adjusted to compensate.
     """
 
     def __init__(self, db_session: Optional[Session] = None):
@@ -53,6 +85,7 @@ class ProductAwareSizeRecommender:
         demographic_label: str,
         product_id: Optional[str] = None,
         fit_preference: str = "regular",
+        product_category: Optional[str] = None,
     ) -> ProductSizeRecommendation:
         """
         Recommend size based on measurements, demographics, and optional product
@@ -64,6 +97,9 @@ class ProductAwareSizeRecommender:
             demographic_label: Human-readable label (e.g., "Adult Male")
             product_id: Optional product ID for product-specific sizing
             fit_preference: "tight", "regular", or "loose" (for Feature #2)
+            product_category: Product category (e.g., "t-shirt", "jacket", "coat").
+                            Used for category-aware measurement adjustment when the
+                            product being purchased differs from what the person is wearing.
 
         Returns:
             ProductSizeRecommendation with best size and probabilities

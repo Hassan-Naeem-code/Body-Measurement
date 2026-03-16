@@ -149,7 +149,7 @@ export function SizeResultCard({ person, personIndex }: SizeResultCardProps) {
             </div>
             <div className="flex-1">
               <h3 className="text-lg font-semibold text-red-800 dark:text-red-200">
-                Person {personIndex + 1} - Unable to Measure
+                Unable to Measure
               </h3>
               <p className="text-red-600 dark:text-red-300 mt-1">
                 We couldn't get accurate measurements for this person.
@@ -192,13 +192,7 @@ export function SizeResultCard({ person, personIndex }: SizeResultCardProps) {
           <div>
             <div className="flex items-center gap-2 text-white/80 text-sm">
               <User className="w-4 h-4" />
-              <span>Person {personIndex + 1}</span>
-              {person.demographic_label && (
-                <>
-                  <span className="text-white/50">•</span>
-                  <span>{person.demographic_label}</span>
-                </>
-              )}
+              <span>{person.demographic_label || 'Your Measurements'}</span>
             </div>
             <div className="mt-3">
               <p className="text-white/80 text-sm font-medium uppercase tracking-wide">

@@ -9,6 +9,7 @@ from app.ml.circumference_extractor_simple import SimpleCircumferenceExtractor, 
 from app.ml.demographic_detector import DemographicDetector, DemographicInfo
 from app.ml.depth_enhanced_extractor import DepthEnhancedCircumferenceExtractor, DepthMeasurementData
 from app.ml.depth_estimator import DepthEstimator
+from app.ml.skeleton_measurement_extractor import SkeletonMeasurementExtractor
 
 __all__ = [
     "PoseDetector",
@@ -28,4 +29,5 @@ __all__ = [
     "DepthEnhancedCircumferenceExtractor",
     "DepthMeasurementData",
     "DepthEstimator",
+    "SkeletonMeasurementExtractor",
 ]

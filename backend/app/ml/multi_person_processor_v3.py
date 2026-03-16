@@ -1,6 +1,10 @@
 """
 Enhanced Multi-Person Body Measurement Processor V3
 Uses depth estimation for 98% accuracy circumference measurements
+
+Supports skeleton-based measurement mode that is clothing-independent:
+measurements are derived from bone structure + anthropometric models,
+not from image segmentation (which includes clothing).
 """
 
 import numpy as np
@@ -14,6 +18,13 @@ from app.ml.circumference_extractor_simple import SimpleCircumferenceExtractor, 
 from app.ml.circumference_extractor_ml import MLCircumferenceExtractor
 from app.ml.size_recommender_v2 import EnhancedSizeRecommender, SizeRecommendation
 from app.ml.demographic_detector import DemographicDetector, DemographicInfo
+
+# Import skeleton-based extractor (clothing-independent)
+try:
+    from app.ml.skeleton_measurement_extractor import SkeletonMeasurementExtractor
+    SKELETON_EXTRACTOR_AVAILABLE = True
+except ImportError:
+    SKELETON_EXTRACTOR_AVAILABLE = False
 
 # Import depth-enhanced extractor for 95-98% accuracy
 try:
@@ -41,6 +52,7 @@ class PersonMeasurement:
     demographic_info: Optional[DemographicInfo]  # Gender and age group
     bounding_box: PersonBoundingBox
     pose_landmarks: Optional[PoseLandmarks] = None  # For visualization
+    is_primary: bool = False  # True if auto-selected as the target person
 
 
 @dataclass
@@ -73,7 +85,9 @@ class DepthBasedMultiPersonProcessor:
         use_ml_ratios: bool = True,
         use_midas_depth: bool = True,
         use_3d_mesh: bool = True,
+        use_skeleton_mode: bool = True,
         smpl_model_path: str = None,
+        auto_select_primary: bool = True,
     ):
         """
         Args:
@@ -84,20 +98,34 @@ class DepthBasedMultiPersonProcessor:
             use_ml_ratios: If True, use ML-based depth ratio predictor
             use_midas_depth: If True, use MiDaS depth estimation for 95-98% accuracy
             use_3d_mesh: If True, use 3D mesh reconstruction for 92-98% accuracy (highest, recommended)
+            use_skeleton_mode: If True, use skeleton-only measurements (clothing-independent).
+                              This is recommended for e-commerce where users wear everyday clothing.
             smpl_model_path: Path to SMPL model files for 3D reconstruction
+            auto_select_primary: If True, auto-select the primary person in multi-person photos
+                                using bbox size + center proximity + pose quality scoring.
         """
         self.person_detector = PersonDetector(yolo_model_size, yolo_confidence)
         self.pose_detector = PoseDetector(min_detection_confidence=pose_confidence)
         self.body_validator = FullBodyValidator(custom_validation_thresholds)
+        self.auto_select_primary = auto_select_primary
 
         # Choose circumference extractor based on configuration
-        # Priority: 3D Mesh > MiDaS Depth > ML Ratios > Simple
+        # Priority: Skeleton (clothing-independent) > 3D Mesh > MiDaS Depth > ML Ratios > Simple
         self.use_ml_ratios = use_ml_ratios
         self.use_midas_depth = use_midas_depth
         self.use_3d_mesh = use_3d_mesh
+        self.use_skeleton_mode = use_skeleton_mode
+        self._extractor_type = "simple"  # default
 
-        # Try 3D mesh-based extraction first (highest accuracy)
-        if use_3d_mesh and MESH_3D_EXTRACTOR_AVAILABLE:
+        # Try skeleton-based extraction first (clothing-independent, best for e-commerce)
+        if use_skeleton_mode and SKELETON_EXTRACTOR_AVAILABLE:
+            self.circumference_extractor = SkeletonMeasurementExtractor()
+            self._extractor_type = "skeleton_anthropometric"
+            print("✓ Using Skeleton-Based Anthropometric Extractor (clothing-independent)")
+            print("  → Measurements based on bone structure + ANSUR/CAESAR population models")
+            print("  → Clothing type has ZERO effect on measurements")
+        # Try 3D mesh-based extraction (highest accuracy for controlled conditions)
+        elif use_3d_mesh and MESH_3D_EXTRACTOR_AVAILABLE:
             try:
                 self.circumference_extractor = create_3d_extractor(
                     smpl_model_path=smpl_model_path,
@@ -111,40 +139,54 @@ class DepthBasedMultiPersonProcessor:
                 print(f"⚠ 3D Mesh initialization failed: {e}. Falling back to MiDaS depth.")
                 use_3d_mesh = False
 
-        if not use_3d_mesh and use_midas_depth and DEPTH_EXTRACTOR_AVAILABLE:
-            try:
-                self.circumference_extractor = DepthEnhancedCircumferenceExtractor(
-                    use_midas=True,
-                    midas_model="DPT_Hybrid"  # Best balance of speed/accuracy
-                )
-                self._extractor_type = "midas_depth"
-                print("✓ Using MiDaS Depth-Enhanced Extractor (85-92% accuracy target)")
-            except Exception as e:
-                print(f"⚠ MiDaS initialization failed: {e}. Falling back to ML ratios.")
+        if self._extractor_type not in ("skeleton_anthropometric", "3d_mesh"):
+            if not use_3d_mesh and use_midas_depth and DEPTH_EXTRACTOR_AVAILABLE:
+                try:
+                    self.circumference_extractor = DepthEnhancedCircumferenceExtractor(
+                        use_midas=True,
+                        midas_model="DPT_Hybrid"  # Best balance of speed/accuracy
+                    )
+                    self._extractor_type = "midas_depth"
+                    print("✓ Using MiDaS Depth-Enhanced Extractor (85-92% accuracy target)")
+                except Exception as e:
+                    print(f"⚠ MiDaS initialization failed: {e}. Falling back to ML ratios.")
+                    self.circumference_extractor = MLCircumferenceExtractor(use_ml_ratios=True)
+                    self._extractor_type = "ml_ratios"
+            elif use_ml_ratios:
                 self.circumference_extractor = MLCircumferenceExtractor(use_ml_ratios=True)
                 self._extractor_type = "ml_ratios"
-        elif not use_3d_mesh and use_ml_ratios:
-            self.circumference_extractor = MLCircumferenceExtractor(use_ml_ratios=True)
-            self._extractor_type = "ml_ratios"
-            print("✓ Using ML-Enhanced Extractor (80-88% accuracy target)")
-        elif not use_3d_mesh:
-            self.circumference_extractor = SimpleCircumferenceExtractor()
-            self._extractor_type = "simple"
-            print("✓ Using Simple Geometric Extractor (70-80% accuracy target)")
+                print("✓ Using ML-Enhanced Extractor (80-88% accuracy target)")
+            else:
+                self.circumference_extractor = SimpleCircumferenceExtractor()
+                self._extractor_type = "simple"
+                print("✓ Using Simple Geometric Extractor (70-80% accuracy target)")
 
         self.demographic_detector = DemographicDetector()
         self.size_recommender = EnhancedSizeRecommender()
 
-    def process_image(self, image: np.ndarray) -> MultiPersonResult:
+    def process_image(
+        self,
+        image: np.ndarray,
+        height_cm: float = None,
+        gender: str = None,
+        age_group: str = None,
+    ) -> MultiPersonResult:
         """
-        Process image and extract measurements for all valid people
+        Process image and extract measurements for all valid people.
 
         Args:
             image: BGR image as numpy array
+            height_cm: User-provided height in cm (140-210). Dramatically improves accuracy.
+            gender: User-provided gender ("male"/"female"). Overrides auto-detection.
+            age_group: User-provided age group ("adult"/"teen"/"child"). Overrides auto-detection.
 
         Returns:
             MultiPersonResult with measurements for valid people
         """
+        # Store user-provided calibration data for use in single-person processing
+        self._user_height_cm = height_cm
+        self._user_gender = gender
+        self._user_age_group = age_group
         # Step 1: Detect all people
         people_bboxes = self.person_detector.detect_people(image)
 
@@ -161,11 +203,24 @@ class DepthBasedMultiPersonProcessor:
                 }
             )
 
+        # Step 1.5: Smart person selection for multi-person photos
+        primary_person_id = None
+        if self.auto_select_primary and len(people_bboxes) > 1:
+            primary = self.person_detector.select_primary_person(people_bboxes, image)
+            primary_person_id = primary.person_id
+            print(f"📌 Auto-selected primary person: person_{primary_person_id} "
+                  f"(from {len(people_bboxes)} detected)")
+
         # Step 2: Process each detected person
         all_person_measurements = []
 
         for bbox in people_bboxes:
             person_result = self._process_single_person(image, bbox)
+            # Flag the primary person
+            if primary_person_id is not None:
+                person_result.is_primary = (bbox.person_id == primary_person_id)
+            elif len(people_bboxes) == 1:
+                person_result.is_primary = True
             all_person_measurements.append(person_result)
 
         # Step 3: Filter for valid people only
@@ -176,8 +231,16 @@ class DepthBasedMultiPersonProcessor:
 
         invalid_count = len(all_person_measurements) - len(valid_measurements)
 
+        # Sort so primary person comes first
+        all_person_measurements.sort(key=lambda pm: (not pm.is_primary, pm.person_id))
+
         # Get extractor-specific metadata
-        if self._extractor_type == "3d_mesh":
+        if self._extractor_type == "skeleton_anthropometric":
+            extractor_name = "skeleton_anthropometric_v1"
+            depth_method = "none_skeleton_only"
+            accuracy_target = "85-92% accuracy (clothing-independent)"
+            features = "skeleton_landmarks_only, ansur_caesar_regression, body_type_estimation, clothing_independent, smart_person_selection"
+        elif self._extractor_type == "3d_mesh":
             extractor_name = "smpl_mesh_reconstruction_v1"
             depth_method = "3d_mesh_slicing"
             accuracy_target = "92-98% accuracy"
@@ -212,6 +275,9 @@ class DepthBasedMultiPersonProcessor:
                 "accuracy_target": accuracy_target,
                 "features": features,
                 "extractor_type": self._extractor_type,
+                "auto_select_primary": self.auto_select_primary,
+                "primary_person_id": primary_person_id,
+                "clothing_independent": self._extractor_type == "skeleton_anthropometric",
             }
         )
 
@@ -291,8 +357,9 @@ class DepthBasedMultiPersonProcessor:
                 validation_result.is_valid = True
                 print(f"    -> Validated via essential parts (non-critical missing: {validation_result.missing_parts})")
 
-        # If validation still failed after lenient checks
-        if not validation_result.is_valid:
+        # If validation failed but we have skeleton landmarks, still try to extract
+        # measurements for the primary person (skeleton only needs shoulders+hips+ankles)
+        if not validation_result.is_valid and not self._has_skeleton_essentials(pose_landmarks):
             return PersonMeasurement(
                 person_id=bbox.person_id,
                 detection_confidence=bbox.confidence,
@@ -303,18 +370,46 @@ class DepthBasedMultiPersonProcessor:
                 bounding_box=bbox
             )
 
-        # Extract measurements using DEPTH-BASED v3 extractor
-        # Pass original cropped image for depth estimation
-        body_measurements = self.circumference_extractor.extract_measurements(
-            pose_landmarks,
-            original_image=cropped_image
-        )
+        # Get user-provided calibration data (if any)
+        user_height = getattr(self, '_user_height_cm', None)
+        user_gender = getattr(self, '_user_gender', None)
+        user_age_group = getattr(self, '_user_age_group', None)
 
-        # Detect demographics (gender and age group)
+        # Gender detection: user-provided > skeleton-based > ML model
+        if user_gender:
+            gender = user_gender
+            print(f"  Gender: {gender} (user-provided)")
+        elif self._extractor_type == "skeleton_anthropometric":
+            gender = self.circumference_extractor.detect_gender_from_skeleton(pose_landmarks)
+            print(f"  Gender: {gender} (skeleton-detected)")
+        else:
+            gender = None  # Will be detected by demographic detector below
+
+        # Extract measurements
+        if self._extractor_type == "skeleton_anthropometric":
+            body_measurements = self.circumference_extractor.extract_measurements(
+                pose_landmarks,
+                original_image=cropped_image,
+                gender=gender or "male",
+                known_height_cm=user_height,
+            )
+        else:
+            body_measurements = self.circumference_extractor.extract_measurements(
+                pose_landmarks,
+                original_image=cropped_image
+            )
+
+        # Demographic detection
         demographic_info = self.demographic_detector.detect_demographics(
             pose_landmarks,
             body_measurements
         )
+
+        # Override demographics with user-provided or skeleton-detected values
+        if gender:
+            demographic_info.gender = gender
+        if user_age_group:
+            demographic_info.age_group = user_age_group
 
         # Get demographic label for display
         from app.ml.demographic_detector import DemographicDetector
@@ -398,3 +493,16 @@ class DepthBasedMultiPersonProcessor:
         # Allow measurements if at least 5 of 6 essential landmarks are visible
         # This handles cases where one side might be slightly occluded
         return visible_count >= 5
+
+    def _has_skeleton_essentials(self, pose_landmarks: PoseLandmarks) -> bool:
+        """
+        Minimum check for skeleton-based measurement extraction.
+        Needs at least one shoulder, one hip, and one ankle with any visibility.
+        More lenient than _has_essential_measurement_parts — used when full-body
+        validation fails but we still want to attempt measurements.
+        """
+        vis = pose_landmarks.visibility_scores
+        has_shoulder = max(vis.get("LEFT_SHOULDER", 0), vis.get("RIGHT_SHOULDER", 0)) > 0.1
+        has_hip = max(vis.get("LEFT_HIP", 0), vis.get("RIGHT_HIP", 0)) > 0.1
+        has_ankle = max(vis.get("LEFT_ANKLE", 0), vis.get("RIGHT_ANKLE", 0)) > 0.1
+        return has_shoulder and has_hip and has_ankle

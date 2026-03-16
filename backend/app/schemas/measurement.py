@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 class PoseLandmark(BaseModel):
@@ -99,6 +99,9 @@ class PersonMeasurementResponse(BaseModel):
     bounding_box: Optional[BoundingBox] = Field(None, description="Person bounding box for visualization")
     pose_landmarks: Optional[PoseLandmarks] = Field(None, description="Pose landmarks for body outline visualization")
 
+    # Smart person selection
+    is_primary: bool = Field(False, description="True if auto-selected as the primary/target person in multi-person photos")
+
     class Config:
         from_attributes = True
 
@@ -115,7 +118,7 @@ class MultiPersonMeasurementResponse(BaseModel):
     )
 
     processing_time_ms: float
-    processing_metadata: Dict[str, str] = Field(..., description="Pipeline metadata")
+    processing_metadata: Dict[str, Any] = Field(..., description="Pipeline metadata")
 
     class Config:
         from_attributes = True

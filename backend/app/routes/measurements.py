@@ -357,7 +357,9 @@ async def process_multi_person_measurement(
     request: Request,
     file: UploadFile = File(...),
     use_ml_ratios: bool = Query(True, description="Use ML-based depth ratio prediction (recommended for better accuracy)"),
-    height_cm: float = Query(None, description="Height in cm for camera calibration (140-210cm). Only applies when single person detected."),
+    height_cm: float = Query(None, description="Height in cm (140-210). Providing height dramatically improves accuracy."),
+    gender: str = Query(None, description="Gender: 'male' or 'female'. Overrides auto-detection."),
+    age_group: str = Query(None, description="Age group: 'adult', 'teen', or 'child'. Overrides auto-detection."),
     brand: Brand = Depends(get_current_brand_by_api_key),
     db: Session = Depends(get_db),
 ):
@@ -430,11 +432,23 @@ async def process_multi_person_measurement(
 
         # Process all people in the image with DEPTH-BASED V3 processor
         # (ML-enhanced for better accuracy)
+        # Validate user-provided params
+        validated_height = None
+        if height_cm is not None:
+            if 140 <= height_cm <= 210:
+                validated_height = height_cm
+        validated_gender = gender if gender in ("male", "female") else None
+        validated_age = age_group if age_group in ("adult", "teen", "child") else None
+
         def run_ml_processing():
             """CPU-bound ML processing function to run in thread pool"""
-            # Use cached processor to avoid reloading models
             processor = get_cached_processor(use_ml_ratios=use_ml_ratios)
-            return processor.process_image(image)
+            return processor.process_image(
+                image,
+                height_cm=validated_height,
+                gender=validated_gender,
+                age_group=validated_age,
+            )
 
         # Run ML processing in thread pool with timeout
         result = await run_ml_task_with_timeout(
@@ -453,11 +467,40 @@ async def process_multi_person_measurement(
         if result.total_people_detected == 0:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="No people detected in the image. Please ensure the image contains visible people.",
+                detail="No person detected in the image. Please upload a clear, full-body photo of yourself.",
             )
 
-        # Handle case: people detected but none valid
-        if result.valid_people_count == 0:
+        # Reject multi-person images — single person only for accurate sizing
+        if result.total_people_detected > 1:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    f"Multiple people detected ({result.total_people_detected} people found).\n\n"
+                    "Please upload a photo with only ONE person for accurate size prediction.\n\n"
+                    "Tips:\n"
+                    "- Use a photo of just yourself\n"
+                    "- Make sure no one else is in the frame\n"
+                    "- Full body visible from head to feet"
+                ),
+            )
+
+        # Find the primary person (best candidate for measurement)
+        # Even if strict validation fails, we still try to return measurements
+        # for the primary person as long as pose landmarks were detected
+        primary_person = None
+        for pm in result.measurements:
+            if getattr(pm, 'is_primary', False):
+                primary_person = pm
+                break
+        if not primary_person and result.measurements:
+            primary_person = result.measurements[0]
+
+        # Only reject if NO person has body measurements at all
+        has_any_measurements = any(
+            pm.body_measurements is not None for pm in result.measurements
+        )
+
+        if not has_any_measurements:
             # Check if the issue is "not a human" vs "missing body parts"
             all_missing_parts = set()
             not_human_count = 0
@@ -465,64 +508,48 @@ async def process_multi_person_measurement(
             for pm in result.measurements:
                 missing_parts = pm.validation_result.missing_parts
                 all_missing_parts.update(missing_parts)
-
-                # Log validation details for debugging
-                logger.debug(f"Validation: missing={missing_parts}, confidence={pm.validation_result.overall_confidence:.2%}")
-
-                # Check if marked as "not human"
                 if "not_human_detected" in missing_parts:
                     not_human_count += 1
 
-            # Case 1: Not a real human (mask, drawing, animal, mannequin)
-            if not_human_count > 0:
-                if not_human_count == result.total_people_detected:
-                    # All detected objects are not humans
-                    raise HTTPException(
-                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                        detail=(
-                            "❌ NOT A REAL HUMAN DETECTED\n\n"
-                            "The image does not contain a real human being. "
-                            "Please upload a photo of a REAL PERSON (not a mask, mannequin, drawing, cartoon, or animal).\n\n"
-                            "Requirements:\n"
-                            "✓ Real human being (not an object or costume)\n"
-                            "✓ Full body visible (head to feet)\n"
-                            "✓ Clear photo (not blurry or obscured)"
-                        ),
-                    )
-                else:
-                    # Some are not human, some have other issues
-                    raise HTTPException(
-                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                        detail=(
-                            f"Detected {result.total_people_detected} people, but validation failed:\n"
-                            f"• {not_human_count} NOT REAL HUMANS (masks, drawings, objects)\n"
-                            f"• {result.total_people_detected - not_human_count} missing body parts\n\n"
-                            "Please upload a photo with REAL PEOPLE showing FULL BODY (head to feet)."
-                        ),
-                    )
+            if not_human_count == result.total_people_detected:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=(
+                        "The image does not contain a real human being. "
+                        "Please upload a photo of a real person showing their full body (head to feet)."
+                    ),
+                )
 
-            # Case 2: Real humans but missing body parts (headshots, cropped images)
             missing_parts_list = [p for p in all_missing_parts if p != "not_human_detected"][:5]
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=(
-                    f"❌ FULL BODY NOT VISIBLE\n\n"
-                    f"Detected {result.total_people_detected} people, but they are not showing their WHOLE BODY.\n\n"
-                    f"Missing parts: {', '.join(missing_parts_list)}\n\n"
-                    "Requirements:\n"
-                    "✓ Full body visible from HEAD to FEET\n"
-                    "✓ All parts visible: head, shoulders, elbows, hands, torso, legs, feet\n"
-                    "✓ Not a headshot or cropped photo\n"
-                    "✓ Person standing upright (not sitting or lying down)"
+                    f"Could not detect a full body in the image.\n\n"
+                    f"Missing: {', '.join(missing_parts_list)}\n\n"
+                    "Please upload a photo showing your full body from head to feet."
                 ),
             )
 
         # Get image dimensions for normalization
         image_height, image_width = image.shape[:2]
 
+        # Single-person mode: return only the best candidate
+        # Priority: primary person with measurements > any person with measurements > first person
+        people_with_measurements = [pm for pm in result.measurements if pm.body_measurements is not None]
+
+        if people_with_measurements:
+            # Prefer the primary-flagged person
+            primary = [pm for pm in people_with_measurements if getattr(pm, 'is_primary', False)]
+            if primary:
+                primary_measurements = [primary[0]]
+            else:
+                primary_measurements = [people_with_measurements[0]]
+        else:
+            primary_measurements = [result.measurements[0]] if result.measurements else []
+
         # Convert to response format
         measurement_responses = []
-        for pm in result.measurements:
+        for pm in primary_measurements:
             # Convert landmarks and bounding box for visualization
             pose_landmarks_schema = convert_landmarks_to_schema(
                 pm.pose_landmarks, image_width, image_height
@@ -564,6 +591,8 @@ async def process_multi_person_measurement(
                 # Visualization data
                 bounding_box=bbox_schema,
                 pose_landmarks=pose_landmarks_schema,
+                # Smart person selection
+                is_primary=getattr(pm, 'is_primary', False),
             )
             measurement_responses.append(person_response)
 
@@ -634,11 +663,11 @@ async def process_multi_person_measurement(
                 loop = asyncio.get_event_loop()
                 await loop.run_in_executor(_db_thread_pool, save_multi_person_to_db)
 
-        # Return multi-person response
+        # Return response (single person — primary auto-selected)
         return MultiPersonMeasurementResponse(
             total_people_detected=result.total_people_detected,
-            valid_people_count=result.valid_people_count,
-            invalid_people_count=result.invalid_people_count,
+            valid_people_count=len(measurement_responses),
+            invalid_people_count=result.total_people_detected - len(measurement_responses),
             measurements=measurement_responses,
             processing_time_ms=processing_time_ms,
             processing_metadata=result.processing_metadata

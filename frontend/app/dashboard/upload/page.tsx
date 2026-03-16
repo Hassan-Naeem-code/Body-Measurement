@@ -125,6 +125,11 @@ export default function UploadPage() {
   const [error, setError] = useState('');
   const [dragActive, setDragActive] = useState(false);
 
+  // Calibration inputs (user-provided for accuracy)
+  const [heightCm, setHeightCm] = useState<string>('');
+  const [gender, setGender] = useState<string>('');
+  const [ageGroup, setAgeGroup] = useState<string>('');
+
   // Visualization options
   const [showVisualization, setShowVisualization] = useState(true);
   const [showSkeleton, setShowSkeleton] = useState(true);
@@ -282,10 +287,19 @@ export default function UploadPage() {
         return;
       }
 
+      const calibration: { heightCm?: number; gender?: string; ageGroup?: string } = {};
+      if (heightCm) {
+        const h = parseFloat(heightCm);
+        if (h >= 140 && h <= 210) calibration.heightCm = h;
+      }
+      if (gender) calibration.gender = gender;
+      if (ageGroup) calibration.ageGroup = ageGroup;
+
       const measurementResult = await measurementsAPI.processMultiPerson(
         apiKey,
         selectedFile,
-        abortControllerRef.current.signal
+        abortControllerRef.current.signal,
+        Object.keys(calibration).length > 0 ? calibration : undefined
       );
       setResult(measurementResult);
       toast.success('Image processed successfully');
@@ -313,6 +327,9 @@ export default function UploadPage() {
     setLoading(false);
     setShow3DViewer(false);
     setViewer3DPerson(null);
+    setHeightCm('');
+    setGender('');
+    setAgeGroup('');
     // Cleanup cropped image URL
     if (croppedImageUrlRef.current) {
       URL.revokeObjectURL(croppedImageUrlRef.current);
@@ -402,10 +419,10 @@ export default function UploadPage() {
 
               <div className="space-y-2">
                 <h3 className="text-xl font-semibold text-foreground">
-                  {dragActive ? 'Drop your image here' : 'Upload a photo'}
+                  {dragActive ? 'Drop your image here' : 'Upload your full-body photo'}
                 </h3>
                 <p className="text-muted-foreground max-w-md">
-                  Drag and drop a full-body image here, or click to browse
+                  Upload a single person full-body photo (head to toe) for accurate size prediction
                 </p>
               </div>
 
@@ -501,17 +518,77 @@ export default function UploadPage() {
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-success" />
-                      Gender & age estimation
+                      Clothing-independent skeleton analysis
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-success" />
-                      Accurate circumferences
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-success" />
-                      Size recommendations
+                      Accurate circumferences & size recommendations
                     </li>
                   </ul>
+                </div>
+
+                {/* Calibration Inputs */}
+                <div className="p-5 rounded-xl bg-muted/50 border border-border space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Ruler className="w-4 h-4 text-primary" />
+                    <h4 className="font-semibold text-sm text-foreground">Calibration (improves accuracy)</h4>
+                  </div>
+
+                  <div className="space-y-3">
+                    {/* Height Input */}
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                        Height (cm) <span className="text-primary">*recommended</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="100"
+                        max="220"
+                        placeholder="e.g. 175"
+                        value={heightCm}
+                        onChange={(e) => setHeightCm(e.target.value)}
+                        className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Gender Select */}
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1 block">Gender</label>
+                        <select
+                          value={gender}
+                          onChange={(e) => setGender(e.target.value)}
+                          className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        >
+                          <option value="">Auto-detect</option>
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                        </select>
+                      </div>
+
+                      {/* Age Group Select */}
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground mb-1 block">Age Group</label>
+                        <select
+                          value={ageGroup}
+                          onChange={(e) => setAgeGroup(e.target.value)}
+                          className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        >
+                          <option value="">Auto-detect</option>
+                          <option value="adult">Adult</option>
+                          <option value="teen">Teen (13-17)</option>
+                          <option value="child">Child (4-12)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {!heightCm && (
+                      <p className="text-xs text-amber-500 flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3" />
+                        Without height, accuracy drops significantly
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 <Button
@@ -647,8 +724,8 @@ export default function UploadPage() {
                   </div>
                 )}
 
-                {/* Person Selector (if multiple people) */}
-                {result.measurements.length > 1 && (
+                {/* Person Selector (hidden in single-person mode) */}
+                {false && result.measurements.length > 1 && (
                   <div className="mt-4 flex flex-wrap items-center gap-2">
                     <span className="text-sm text-muted-foreground mr-2">Show person:</span>
                     <button
@@ -690,23 +767,15 @@ export default function UploadPage() {
               <div className="space-y-2">
                 <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 rounded-full text-sm font-medium backdrop-blur-sm">
                   <BadgeCheck className="w-4 h-4" />
-                  <span>Processing Complete</span>
+                  <span>Analysis Complete</span>
                 </div>
                 <h2 className="text-3xl lg:text-4xl font-bold">
-                  {result.valid_people_count} {result.valid_people_count === 1 ? 'Person' : 'People'} Detected
+                  Your Size Result
                 </h2>
                 <div className="flex flex-wrap items-center gap-4 text-sm text-white/80">
                   <span className="flex items-center gap-1.5">
-                    <Users className="w-4 h-4" />
-                    Total: {result.total_people_detected}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4" />
-                    Valid: {result.valid_people_count}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <AlertTriangle className="w-4 h-4" />
-                    Invalid: {result.invalid_people_count}
+                    <User className="w-4 h-4" />
+                    {result.measurements[0]?.demographic_label || 'Person Detected'}
                   </span>
                   <span className="flex items-center gap-1.5">
                     <Clock className="w-4 h-4" />
@@ -727,36 +796,34 @@ export default function UploadPage() {
             </div>
           </div>
 
-          {/* Display Each Person - Clean Size Result Cards */}
-          {result.measurements.map((person) => (
-            <div key={person.person_id} className="space-y-3">
-              <SizeResultCard person={person} personIndex={person.person_id} />
+          {/* Single Person Result */}
+          {result.measurements[0] && (
+            <div className="space-y-3">
+              <SizeResultCard person={result.measurements[0]} personIndex={0} />
 
-              {/* Additional actions for valid persons */}
-              {person.is_valid && (
+              {result.measurements[0].is_valid && (
                 <div className="flex flex-wrap gap-2">
                   <button
-                    onClick={() => handleView3D(person)}
+                    onClick={() => handleView3D(result.measurements[0])}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:hover:bg-indigo-900/50 transition-colors"
                   >
                     <Box className="w-4 h-4" />
                     View 3D Body Model
                   </button>
 
-                  {/* Product Size Recommendations - Expandable */}
                   <details className="w-full mt-2">
                     <summary className="cursor-pointer px-4 py-2 rounded-lg text-sm font-medium bg-muted hover:bg-muted/80 transition-colors inline-flex items-center gap-2">
                       <Ruler className="w-4 h-4" />
                       View Product-Specific Sizes
                     </summary>
                     <div className="mt-3">
-                      <SizeRecommendations measurements={person} />
+                      <SizeRecommendations measurements={result.measurements[0]} />
                     </div>
                   </details>
                 </div>
               )}
             </div>
-          ))}
+          )}
 
           {/* Actions */}
           <div className="flex flex-col sm:flex-row gap-4">

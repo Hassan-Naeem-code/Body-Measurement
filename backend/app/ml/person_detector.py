@@ -84,6 +84,57 @@ class PersonDetector:
 
         return people
 
+    def select_primary_person(
+        self,
+        people: List[PersonBoundingBox],
+        image: np.ndarray,
+    ) -> PersonBoundingBox:
+        """
+        Select the most likely primary/target person from a group photo.
+
+        Scoring heuristic (designed for e-commerce use):
+        - Bounding box area (40%): Largest person is most likely the subject
+        - Center proximity (35%): Subject is usually centered in photo
+        - Detection confidence (25%): Higher YOLO confidence as tiebreaker
+
+        Args:
+            people: List of detected people
+            image: Original image
+
+        Returns:
+            The most likely primary person
+        """
+        if len(people) <= 1:
+            return people[0]
+
+        img_h, img_w = image.shape[:2]
+        img_cx, img_cy = img_w / 2, img_h / 2
+        img_area = img_h * img_w
+
+        scores = []
+        for person in people:
+            # Bounding box area relative to image
+            bbox_area = (person.x2 - person.x1) * (person.y2 - person.y1)
+            area_score = bbox_area / img_area
+
+            # Center proximity (1.0 = center, 0.0 = corner)
+            bbox_cx = (person.x1 + person.x2) / 2
+            bbox_cy = (person.y1 + person.y2) / 2
+            max_dist = np.sqrt(img_cx ** 2 + img_cy ** 2)
+            center_dist = np.sqrt((bbox_cx - img_cx) ** 2 + (bbox_cy - img_cy) ** 2)
+            center_score = 1.0 - (center_dist / max_dist)
+
+            # Combined score
+            total = (
+                area_score * 0.40
+                + center_score * 0.35
+                + person.confidence * 0.25
+            )
+            scores.append(total)
+
+        best_idx = int(np.argmax(scores))
+        return people[best_idx]
+
     def crop_person(
         self,
         image: np.ndarray,
