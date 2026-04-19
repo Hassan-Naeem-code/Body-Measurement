@@ -71,7 +71,6 @@ export default function Body3DViewerInner({
   const [textureLoaded, setTextureLoaded] = useState(false);
   const [depthData, setDepthData] = useState<number[][] | null>(null);
   const depth2DMeshRef = useRef<THREE.Mesh | null>(null);
-
   // Load texture from image URL (works with blob URLs)
   const loadTexture = useCallback(async (url: string): Promise<THREE.Texture | null> => {
     return new Promise((resolve) => {
